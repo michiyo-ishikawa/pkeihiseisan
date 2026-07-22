@@ -1,0 +1,2576 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>会計管理アプリ | 一般社団法人 Team P</title>
+<!-- Firebase (compat SDK) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<!-- SheetJS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --ink:#1f2933; --ink-soft:#52606d; --line:#d9dee3; --bg:#f4f5f2; --card:#ffffff;
+  --ai:#234e70;        /* 藍 primary */
+  --ai-deep:#17324a;
+  --shu:#b3402a;       /* 朱 alert/unsettled */
+  --moegi:#2e7d5b;     /* 萌黄 settled/paid */
+  --sand:#f0ede4;
+  --radius:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.6}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--ai);outline-offset:1px;border-color:var(--ai)}
+label{display:block;font-size:12px;font-weight:600;color:var(--ink-soft);margin-bottom:3px}
+.req::after{content:" *";color:var(--shu)}
+
+/* ===== header ===== */
+header{background:var(--ai-deep);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+header .brand{font-weight:700;font-size:16px;letter-spacing:.04em}
+header .brand small{display:block;font-size:10px;font-weight:400;opacity:.75;letter-spacing:.12em}
+header .fy{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px}
+header .fy select{width:auto;padding:4px 8px;font-size:13px}
+header .logout{background:transparent;color:#cdd9e5;border:1px solid #46627c;border-radius:6px;padding:4px 12px;font-size:12px}
+header .logout:hover{background:#2c4964}
+
+/* ===== tabs ===== */
+nav{background:var(--card);border-bottom:2px solid var(--line);display:flex;overflow-x:auto;position:sticky;top:0;z-index:20}
+nav button{background:none;border:none;padding:11px 15px;font-size:13.5px;font-weight:600;color:var(--ink-soft);border-bottom:3px solid transparent;white-space:nowrap}
+nav button.active{color:var(--ai);border-bottom-color:var(--ai)}
+nav button:hover{background:var(--sand)}
+
+main{max-width:1120px;margin:0 auto;padding:18px 14px 60px}
+.page{display:none}
+.page.active{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:16px}
+.card h2{font-size:15px;color:var(--ai);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.grid{display:grid;gap:10px 14px}
+.g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:720px){.g3,.g4{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){.g2,.g3,.g4{grid-template-columns:1fr}}
+
+.btn{display:inline-block;border:none;border-radius:7px;padding:9px 18px;font-size:14px;font-weight:600}
+.btn-p{background:var(--ai);color:#fff}.btn-p:hover{background:#1b3e5c}
+.btn-s{background:#fff;color:var(--ai);border:1px solid var(--ai)}
+.btn-danger{background:#fff;color:var(--shu);border:1px solid var(--shu)}
+.btn-green{background:var(--moegi);color:#fff}
+.btn-sm{padding:4px 10px;font-size:12px;border-radius:5px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+table.data{width:100%;border-collapse:collapse;font-size:12.5px}
+table.data th{background:var(--sand);text-align:left;padding:7px 8px;border-bottom:2px solid var(--line);font-size:11.5px;color:var(--ink-soft);white-space:nowrap}
+table.data td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+table.data tr:hover td{background:#fafbf8}
+.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mono{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:12px;white-space:nowrap}
+.tbl-wrap{overflow-x:auto}
+
+.badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap}
+.bd-draft{background:#eceff1;color:#546e7a}
+.bd-issued{background:#e3ecf5;color:var(--ai)}
+.bd-paid{background:#e2f0e9;color:var(--moegi)}
+.bd-cancel{background:#eee;color:#999;text-decoration:line-through}
+.bd-unsettled{background:#f7e5e0;color:var(--shu)}
+.bd-settled{background:#e2f0e9;color:var(--moegi)}
+
+.sumcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-bottom:14px}
+.sumcard{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--ai);border-radius:8px;padding:12px 14px}
+.sumcard .t{font-size:12px;color:var(--ink-soft);font-weight:600}
+.sumcard .v{font-size:21px;font-weight:700;font-variant-numeric:tabular-nums}
+.sumcard .s{font-size:11px;color:var(--ink-soft)}
+.sumcard.alert{border-left-color:var(--shu)}.sumcard.alert .v{color:var(--shu)}
+.sumcard.ok{border-left-color:var(--moegi)}
+
+.preview-no{background:var(--sand);border:1px dashed var(--ai);border-radius:8px;padding:8px 14px;display:inline-block;margin-bottom:12px}
+.preview-no b{font-family:Menlo,Consolas,monospace;color:var(--ai);font-size:15px}
+.hint{font-size:11.5px;color:var(--ink-soft)}
+.actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.filterbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.filterbar>*{width:auto;min-width:120px;flex:1}
+.msg{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ai-deep);color:#fff;padding:10px 22px;border-radius:999px;font-size:13px;z-index:99;display:none;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+
+/* items editor */
+#itemRows .irow{display:grid;grid-template-columns:30px 1fr 64px 64px 90px 100px 74px 30px;gap:6px;margin-bottom:6px;align-items:center}
+#itemRows .irow .amt{text-align:right;font-variant-numeric:tabular-nums;font-size:13px;padding-right:4px}
+#itemRows .del{background:none;border:none;color:var(--shu);font-size:16px}
+.calcbox{margin-top:10px;margin-left:auto;max-width:300px;font-size:13.5px}
+.calcbox div{display:flex;justify-content:space-between;padding:3px 0}
+.calcbox .total{border-top:2px solid var(--ink);font-weight:700;font-size:16px;margin-top:4px;padding-top:6px}
+@media(max-width:640px){#itemRows .irow{grid-template-columns:24px 1fr 50px 50px 70px 80px 60px 24px;font-size:12px}}
+
+/* modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(23,50,74,.45);z-index:50;overflow:auto;padding:24px 12px}
+.modal-bg.open{display:block}
+.modal{background:#fff;border-radius:12px;max-width:640px;margin:0 auto;padding:22px}
+.modal h3{font-size:15px;color:var(--ai);margin-bottom:14px}
+
+/* auth overlay */
+#authOverlay{position:fixed;inset:0;background:var(--ai-deep);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
+#authOverlay .box{background:#fff;border-radius:14px;padding:32px 28px;width:100%;max-width:380px}
+#authOverlay h1{font-size:18px;color:var(--ai);margin-bottom:4px}
+#authOverlay .sub{font-size:12px;color:var(--ink-soft);margin-bottom:20px}
+#authErr{color:var(--shu);font-size:12px;margin-top:8px;min-height:16px}
+
+/* party detail */
+#partyDetail{display:none}
+.pd-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.pd-head .pid{font-family:Menlo,Consolas,monospace;background:var(--ai);color:#fff;padding:2px 10px;border-radius:6px;font-size:13px}
+
+/* ===== print templates ===== */
+#printArea{display:none}
+@media print{
+  body>*:not(#printArea){display:none !important}
+  #printArea{display:block}
+  @page{size:A4;margin:18mm 16mm}
+}
+.doc{font-family:"Yu Mincho","Hiragino Mincho ProN",serif;color:#000;max-width:180mm;margin:0 auto;font-size:10.5pt;line-height:1.7}
+.doc .doctitle{text-align:center;font-size:22pt;letter-spacing:1.2em;padding-left:1.2em;margin:4mm 0 8mm;font-weight:600}
+.doc .meta{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6mm}
+.doc .issuer{text-align:left;font-size:10pt;line-height:1.8}
+.doc .issuer .corp{font-size:12pt;font-weight:600}
+.doc .to{font-size:13pt;border-bottom:1px solid #000;display:inline-block;min-width:80mm;padding:0 4mm 1mm 1mm;margin-bottom:3mm}
+.doc .amount-box{border:2px solid #000;display:flex;justify-content:space-between;align-items:center;padding:3mm 6mm;font-size:13pt;font-weight:700;margin:5mm 0;max-width:110mm}
+.doc .amount-box .yen{font-size:17pt}
+.doc table.items{width:100%;border-collapse:collapse;font-size:9.5pt;margin:4mm 0}
+.doc table.items th,.doc table.items td{border:1px solid #000;padding:1.6mm 2mm}
+.doc table.items th{background:#eef1f4;text-align:center;font-weight:600}
+.doc .totals{margin-left:auto;max-width:80mm;font-size:10.5pt}
+.doc .totals div{display:flex;justify-content:space-between;padding:1mm 2mm;border-bottom:1px solid #999}
+.doc .totals .gt{font-weight:700;border-bottom:2px solid #000;font-size:12pt}
+.doc .bank{border:1px solid #000;padding:3mm 4mm;margin-top:5mm;font-size:10pt}
+.doc .bank .bt{font-weight:600;margin-bottom:1mm}
+.doc .note{font-size:8.5pt;margin-top:4mm;color:#222}
+.doc .proviso{border-bottom:1px solid #000;padding:1mm 2mm 1mm 1mm;margin:3mm 0;min-height:9mm}
+.doc .regno{font-size:9.5pt}
+.doc .stampbox{border:1px solid #999;width:22mm;height:22mm;font-size:7.5pt;color:#666;text-align:center;padding-top:1mm}
+</style>
+</head>
+<body>
+
+<!-- ========== ログイン ========== -->
+<div id="authOverlay">
+  <div class="box">
+    <h1>一般社団法人 Team P</h1>
+    <div class="sub">会計管理アプリ v2　—　関係者専用</div>
+    <label>メールアドレス</label>
+    <input type="email" id="authEmail" autocomplete="username">
+    <div style="height:10px"></div>
+    <label>パスワード</label>
+    <input type="password" id="authPass" autocomplete="current-password">
+    <div id="authErr"></div>
+    <button class="btn btn-p" style="width:100%;margin-top:8px" onclick="doLogin()">ログイン</button>
+    <p class="hint" style="margin-top:14px">アカウントはFirebaseコンソール（Authentication）で管理者が発行します。</p>
+  </div>
+</div>
+
+<header>
+  <div class="brand">Team P 会計管理<small>一般社団法人 Team P — 経費・売上・請求書・領収書</small></div>
+  <div class="fy">事業年度
+    <select id="globalFy" onchange="onFyChange()"></select>
+    <button class="logout" onclick="doLogout()">ログアウト</button>
+  </div>
+</header>
+
+<nav id="tabs">
+  <button data-page="page-entry" class="active">＋ 支出入力</button>
+  <button data-page="page-sales">売上・請求</button>
+  <button data-page="page-docs">帳票発行</button>
+  <button data-page="page-parties">取引先</button>
+  <button data-page="page-list">一覧・編集</button>
+  <button data-page="page-tatekae">立替金精算</button>
+  <button data-page="page-summary">集計</button>
+  <button data-page="page-cashflow">資金繰り・予算</button>
+  <button data-page="page-master">マスタ設定</button>
+</nav>
+
+<main>
+
+<!-- ========== 支出入力 ========== -->
+<section id="page-entry" class="page active">
+  <div class="card">
+    <h2>経費の新規登録</h2>
+    <div class="preview-no">証憑番号（保存時に確定）：<b id="entryPreviewNo">—</b></div>
+    <div class="grid g3">
+      <div><label class="req">支払日</label><input type="date" id="eDate"></div>
+      <div><label class="req">勘定科目</label><select id="eKamoku"></select></div>
+      <div><label class="req">支払区分</label><select id="ePayType"></select></div>
+      <div><label class="req">支払先（取引先マスタ／自由入力）</label><select id="eParty" onchange="toggleVendorFree('eParty','eVendorFree')"></select><input id="eVendorFree" placeholder="支払先名を入力（例：〇〇文具店）" style="display:none;margin-top:6px"></div>
+      <div><label>事業名／案件名</label><input id="eProject" list="projectList" placeholder="例：設立準備"></div>
+      <div><label>支払方法</label><select id="ePayMethod"><option>現金</option><option>銀行振込</option><option>クレジットカード</option><option>口座振替</option><option>立替</option><option>その他</option></select></div>
+      <div>
+        <label class="req" id="eAmountExLabel">金額（税抜）</label>
+        <div style="display:flex;gap:12px;margin:2px 0 5px;font-size:12px;font-weight:400">
+          <label style="display:flex;gap:3px;align-items:center"><input type="radio" name="eAmountMode" value="ex" checked onchange="toggleAmountMode()" style="width:auto">税抜で入力</label>
+          <label style="display:flex;gap:3px;align-items:center"><input type="radio" name="eAmountMode" value="in" onchange="toggleAmountMode()" style="width:auto">税込で入力（領収書の金額）</label>
+        </div>
+        <input type="number" id="eAmountEx" min="0" oninput="calcEntryTax()">
+      </div>
+      <div><label>消費税率</label><select id="eTaxRate" onchange="calcEntryTax()"><option value="0.10">10%</option><option value="0.08">8%（軽減）</option><option value="0">対象外・非課税</option></select><div class="hint" id="eTaxHint" style="margin-top:6px"></div></div>
+      <div><label id="eAmountInLabel">税込金額（自動計算）</label><input type="number" id="eAmountIn" min="0" oninput="calcEntryTax()" readonly style="background:var(--sand)"></div>
+      <div><label class="req">品目・摘要</label><input id="eDesc"></div>
+      <div><label>インボイス（適格請求書）</label><select id="eInvoice"><option>あり</option><option>なし</option><option>不要</option></select></div>
+      <div><label>証憑種類</label><select id="eProof"><option>領収書</option><option>レシート</option><option>請求書</option><option>クレジット明細</option><option>振込明細</option><option>その他</option></select></div>
+    </div>
+    <div class="grid g2" style="margin-top:10px">
+      <div><label>事業関連性・備考</label><input id="eNote"></div>
+      <div><label>領収書画像リンク（Google Drive）</label><input id="eImageUrl" placeholder="https://drive.google.com/..."></div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-p" onclick="saveExpense()">保存する</button>
+    </div>
+    <datalist id="projectList"></datalist>
+  </div>
+</section>
+
+<!-- ========== 売上・請求 ========== -->
+<section id="page-sales" class="page">
+  <div class="card">
+    <h2 id="salesFormTitle">請求書の作成</h2>
+    <div class="preview-no">請求書番号（保存時に確定）：<b id="salesPreviewNo">—</b></div>
+    <input type="hidden" id="sEditingId">
+    <div class="grid g3">
+      <div><label class="req">請求先（取引先マスタ）</label><select id="sParty"></select></div>
+      <div><label class="req">発行日</label><input type="date" id="sIssueDate"></div>
+      <div><label>支払期限</label><input type="date" id="sDueDate"></div>
+      <div><label class="req">件名</label><input id="sTitle" placeholder="例：地域連携イベント運営業務"></div>
+      <div><label class="req">収益科目</label><select id="sKamoku"></select></div>
+      <div><label>事業名／案件名</label><input id="sProject" list="projectList"></div>
+    </div>
+    <div style="margin-top:14px"><label>明細</label>
+      <div id="itemRows"></div>
+      <button class="btn btn-s btn-sm" onclick="addItemRow()">＋ 明細行を追加</button>
+    </div>
+    <div class="calcbox">
+      <div><span>小計（税抜）</span><span class="num" id="cSubtotal">0</span></div>
+      <div><span>消費税10%</span><span class="num" id="cTax10">0</span></div>
+      <div><span>消費税8%</span><span class="num" id="cTax8">0</span></div>
+      <div class="total"><span>合計</span><span class="num" id="cTotal">0</span></div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-p" onclick="saveInvoice('draft')">下書き保存</button>
+      <button class="btn btn-green" onclick="saveInvoice('issued')">発行して保存</button>
+      <button class="btn btn-s" onclick="resetInvoiceForm()">クリア</button>
+    </div>
+    <p class="hint" style="margin-top:8px">消費税は請求書1通につき税率ごとに合算して切捨て（インボイス制度対応）。</p>
+  </div>
+  <div class="card">
+    <h2>請求書一覧</h2>
+    <div class="filterbar">
+      <select id="fSalesStatus" onchange="renderSalesList()"><option value="">すべてのステータス</option><option value="draft">下書き</option><option value="issued">発行済（未入金）</option><option value="paid">入金済</option><option value="cancel">取消</option></select>
+      <input id="fSalesText" placeholder="件名・取引先・番号で検索" oninput="renderSalesList()">
+    </div>
+    <div class="tbl-wrap"><table class="data"><thead><tr>
+      <th>番号</th><th>発行日</th><th>請求先</th><th>件名</th><th class="num">合計</th><th>状態</th><th>入金日</th><th>操作</th>
+    </tr></thead><tbody id="salesTbody"></tbody></table></div>
+  </div>
+</section>
+
+<!-- ========== 帳票発行 ========== -->
+<section id="page-docs" class="page">
+  <div class="card">
+    <h2>領収書の単独発行（会費・直接入金など）</h2>
+    <div id="reissueBanner" style="display:none;background:#fff3cd;border:1px solid #e0c36a;border-radius:6px;padding:8px 12px;margin-bottom:10px">
+      差し替え発行モード：<b id="reissueOfNo"></b> の代わりとして新しい領収書を発行します。内容を確認・修正して発行してください。
+      <button class="btn btn-s btn-sm" style="margin-left:8px" onclick="cancelReissue()">キャンセル</button>
+    </div>
+    <div class="preview-no">領収書番号（発行時に確定）：<b id="rcPreviewNo">—</b></div>
+    <div class="grid g3">
+      <div><label class="req">宛名（取引先マスタ）</label><select id="rParty"></select></div>
+      <div><label class="req">発行日</label><input type="date" id="rDate"></div>
+      <div><label class="req">領収金額（税込）</label><input type="number" id="rAmount" min="0" oninput="calcReceiptTax()"></div>
+      <div><label>税率</label><select id="rTaxRate" onchange="calcReceiptTax()"><option value="0.10">10%</option><option value="0.08">8%</option><option value="0">対象外・非課税</option></select></div>
+      <div><label>内訳（自動計算）</label><input id="rBreakdown" readonly style="background:var(--sand)"></div>
+      <div><label>支払方法</label><select id="rPayMethod"><option>銀行振込</option><option>現金</option><option>口座振替</option><option>その他</option></select></div>
+    </div>
+    <div class="grid g2" style="margin-top:10px">
+      <div><label class="req">但し書き</label><input id="rProviso" list="provisoList" placeholder="例：会費として"></div>
+      <div><label>収益科目（台帳記録用）</label><select id="rKamoku"></select></div>
+    </div>
+    <datalist id="provisoList"></datalist>
+    <div class="actions"><button class="btn btn-green" onclick="issueStandaloneReceipt()">発行して印刷プレビュー</button></div>
+  </div>
+  <div class="card">
+    <h2>領収書のまとめて発行（同内容・宛先複数／懇親会・セミナー等）</h2>
+    <p class="hint" style="margin-bottom:10px">同じ内容（金額・但し書き）で、宛先だけ異なる領収書を一度にまとめて発行します。領収書番号は1件ずつ自動採番されます。</p>
+    <div class="grid g3">
+      <div><label class="req">発行日</label><input type="date" id="rbDate"></div>
+      <div><label class="req">領収金額（税込・全員共通）</label><input type="number" id="rbAmount" min="0" oninput="calcBulkReceiptTax()"></div>
+      <div><label>税率</label><select id="rbTaxRate" onchange="calcBulkReceiptTax()"><option value="0.10">10%</option><option value="0.08">8%</option><option value="0">対象外・非課税</option></select></div>
+      <div><label>内訳（自動計算）</label><input id="rbBreakdown" readonly style="background:var(--sand)"></div>
+      <div><label>支払方法</label><select id="rbPayMethod"><option>現金</option><option>銀行振込</option><option>口座振替</option><option>その他</option></select></div>
+      <div><label>収益科目（台帳記録用）</label><select id="rbKamoku"></select></div>
+    </div>
+    <div class="grid g2" style="margin-top:10px">
+      <div><label class="req">但し書き（全員共通）</label><input id="rbProviso" list="provisoList" placeholder="例：セミナー参加費として"></div>
+      <div>
+        <label class="req">宛先（取引先マスタ・複数選択可）</label>
+        <div id="rbPartyList" style="max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:8px 10px"></div>
+        <p class="hint" style="margin-top:4px"><span id="rbPartyCount">0</span>件選択中</p>
+      </div>
+    </div>
+    <div class="actions"><button class="btn btn-green" onclick="issueBulkReceipts()">選択した宛先にまとめて発行して印刷プレビュー</button></div>
+  </div>
+  <div class="card">
+    <h2>発行済み帳票の一覧（再印刷）</h2>
+    <div class="filterbar">
+      <select id="fDocsStatus" onchange="renderDocs()"><option value="">すべての状態</option><option value="issued">発行済</option><option value="void">取消</option></select>
+    </div>
+    <div class="tbl-wrap"><table class="data"><thead><tr>
+      <th>種類</th><th>番号</th><th>発行日</th><th>宛先</th><th class="num">金額</th><th>摘要</th><th>状態</th><th>操作</th>
+    </tr></thead><tbody id="docsTbody"></tbody></table></div>
+  </div>
+</section>
+
+<!-- ========== 取引先 ========== -->
+<section id="page-parties" class="page">
+  <div class="card">
+    <h2 id="partyFormTitle">取引先の登録</h2>
+    <input type="hidden" id="pEditingId">
+    <div class="grid g3">
+      <div><label class="req">名称</label><input id="pName"></div>
+      <div><label>カナ</label><input id="pKana"></div>
+      <div><label>会員区分</label><select id="pMemberClass"><option>非会員</option><option>正会員</option><option>賛助会員</option></select></div>
+      <div><label>区分（複数可）</label>
+        <div style="display:flex;gap:12px;padding-top:6px">
+          <label style="font-weight:400;display:flex;gap:4px;align-items:center"><input type="checkbox" id="pTypeCustomer" style="width:auto">入金先</label>
+          <label style="font-weight:400;display:flex;gap:4px;align-items:center"><input type="checkbox" id="pTypeVendor" style="width:auto">支払先</label>
+        </div>
+      </div>
+      <div><label>住所</label><input id="pAddress"></div>
+      <div><label>連絡先</label><input id="pContact"></div>
+      <div><label>先方インボイス登録番号</label><input id="pInvoiceNo" placeholder="T1234567890123"></div>
+      <div><label>先方振込先</label><input id="pBankInfo"></div>
+      <div><label>備考</label><input id="pNote"></div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-p" id="partySaveBtn" onclick="saveParty()">登録する</button>
+      <button class="btn btn-s" onclick="resetPartyForm()">クリア</button>
+    </div>
+  </div>
+  <div class="card" id="piririImportCard">
+    <h2>ピリリ会名簿から一括登録</h2>
+    <p class="hint">ピリリ会メンバー名簿（PDF）に記載の所属企業を、統合名簿（Excel）の住所と突き合わせた候補です。既に取引先マスタに同名の登録がある場合はグレー表示・チェック不可になります。住所情報が無いものは「住所要確認」と表示されます。</p>
+    <div class="actions">
+      <button class="btn btn-s btn-sm" onclick="togglePiririImportList()" id="piririToggleBtn">候補一覧を表示する</button>
+    </div>
+    <div id="piririImportBody" style="display:none">
+      <div class="actions" style="margin:8px 0">
+        <button class="btn btn-s btn-sm" onclick="piririSelectAll(true)">すべて選択</button>
+        <button class="btn btn-s btn-sm" onclick="piririSelectAll(false)">すべて解除</button>
+        <span class="hint" id="piririCount" style="align-self:center"></span>
+      </div>
+      <div class="tbl-wrap" style="max-height:420px;overflow:auto">
+        <table class="data"><thead><tr><th style="width:30px"></th><th>名称</th><th>住所</th><th>備考</th></tr></thead>
+        <tbody id="piririImportTbody"></tbody></table>
+      </div>
+      <div class="actions" style="margin-top:10px">
+        <button class="btn btn-p" onclick="runPiririImport()">選択した分を取引先マスタへ登録する</button>
+      </div>
+    </div>
+  </div>
+  <div class="card" id="partyDetail">
+    <div class="pd-head"><span class="pid" id="pdId"></span><b id="pdName" style="font-size:16px"></b><button class="btn btn-s btn-sm" onclick="hidePartyDetail()">閉じる</button></div>
+    <div class="sumcards" id="pdCards"></div>
+    <div class="tbl-wrap"><table class="data"><thead><tr><th>日付</th><th>区分</th><th>番号</th><th>内容</th><th class="num">支払（出金）</th><th class="num">売上（入金）</th><th>状態</th></tr></thead><tbody id="pdTbody"></tbody></table></div>
+  </div>
+  <div class="card">
+    <h2>取引先一覧</h2>
+    <div class="filterbar">
+      <input id="fPartyText" placeholder="名称・カナ・IDで検索" oninput="renderPartyList()">
+      <button class="btn btn-p btn-sm" style="flex:none" onclick="exportPartiesExcel()">取引先一覧をExcel出力</button>
+    </div>
+    <div class="tbl-wrap"><table class="data"><thead><tr>
+      <th>ID</th><th>名称</th><th>区分</th><th>会員</th><th class="num">支払累計</th><th class="num">売上累計</th><th class="num">未入金</th><th>操作</th>
+    </tr></thead><tbody id="partyTbody"></tbody></table></div>
+    <p class="hint">累計は選択中の事業年度の実績。行の「実績」でID別の取引履歴を表示します。</p>
+  </div>
+</section>
+
+<!-- ========== 一覧・編集 ========== -->
+<section id="page-list" class="page">
+  <div class="card">
+    <h2>経費一覧</h2>
+    <div class="filterbar">
+      <input id="fText" placeholder="品目・支払先・番号で検索" oninput="renderExpenseList()">
+      <select id="fKamoku" onchange="renderExpenseList()"></select>
+      <select id="fPayType" onchange="renderExpenseList()"><option value="">支払区分：すべて</option><option value="tatekae">立替のみ</option><option value="corp">法人のみ</option></select>
+      <select id="fSettled" onchange="renderExpenseList()"><option value="">精算状況：すべて</option><option value="no">未精算</option><option value="yes">精算済</option></select>
+      <button class="btn btn-p btn-sm" style="flex:none" onclick="exportExpenseListExcel()">この一覧をExcel出力</button>
+    </div>
+    <div class="tbl-wrap"><table class="data"><thead><tr>
+      <th>証憑番号</th><th>支払日</th><th>勘定科目</th><th>支払先</th><th>品目</th><th>事業</th><th class="num">税込金額</th><th>支払区分</th><th>精算</th><th>操作</th>
+    </tr></thead><tbody id="expTbody"></tbody></table></div>
+  </div>
+</section>
+
+<!-- ========== 立替金精算 ========== -->
+<section id="page-tatekae" class="page">
+  <div class="sumcards" id="tatekaeCards"></div>
+  <div class="card">
+    <h2>未精算の立替金</h2>
+    <div class="filterbar">
+      <select id="fTatekaePerson" onchange="renderTatekae()"><option value="">立替者：全員</option></select>
+      <button class="btn btn-p btn-sm" style="flex:none" onclick="openBulkSettle()">選択した項目を一括精算</button>
+      <button class="btn btn-s btn-sm" style="flex:none" onclick="exportTatekaeExcel()">未精算・精算済みをExcel出力</button>
+    </div>
+    <div class="tbl-wrap"><table class="data"><thead><tr>
+      <th><input type="checkbox" id="tCheckAll" style="width:auto" onchange="toggleAllTatekae(this)"></th>
+      <th>証憑番号</th><th>支払日</th><th>立替者</th><th>支払先</th><th>品目</th><th class="num">税込金額</th><th>操作</th>
+    </tr></thead><tbody id="tatekaeTbody"></tbody></table></div>
+  </div>
+  <div class="card">
+    <h2>精算済み履歴</h2>
+    <div class="tbl-wrap"><table class="data"><thead><tr>
+      <th>証憑番号</th><th>立替者</th><th>品目</th><th class="num">税込金額</th><th>精算日</th><th>精算方法</th><th>備考</th><th>操作</th>
+    </tr></thead><tbody id="settledTbody"></tbody></table></div>
+  </div>
+</section>
+
+<!-- ========== 集計 ========== -->
+<section id="page-summary" class="page">
+  <div class="sumcards" id="summaryCards"></div>
+  <div class="card"><h2>収益（正味財産増加）</h2><div class="tbl-wrap"><table class="data"><thead><tr><th>収益科目</th><th class="num">税抜</th><th class="num">消費税</th><th class="num">税込</th><th class="num">件数</th></tr></thead><tbody id="revTbody"></tbody></table></div>
+  <p class="hint">売上台帳は「発行済」以降の請求書と単独発行領収書を計上（下書き・取消は除外）。</p></div>
+  <div class="card"><h2>費用（正味財産減少）</h2><div class="tbl-wrap"><table class="data"><thead><tr><th>勘定科目</th><th class="num">税抜</th><th class="num">消費税</th><th class="num">税込</th><th class="num">件数</th></tr></thead><tbody id="expSumTbody"></tbody></table></div></div>
+  <div class="card"><h2>事業別収支</h2><div class="tbl-wrap"><table class="data"><thead><tr><th>事業名／案件名</th><th class="num">収益（税込）</th><th class="num">費用（税込）</th><th class="num">差引</th></tr></thead><tbody id="projTbody"></tbody></table></div></div>
+  <div class="card"><h2>取引先別集計</h2><div class="tbl-wrap"><table class="data"><thead><tr><th>ID</th><th>取引先</th><th class="num">売上（税込）</th><th class="num">支払（税込）</th><th class="num">差引</th></tr></thead><tbody id="ptySumTbody"></tbody></table></div></div>
+  <div class="card">
+    <h2>Excel出力（決算・監査用）</h2>
+    <p class="hint" style="margin-bottom:10px">選択中の事業年度について、経費台帳・売上台帳・発行領収書・科目別集計・取引先別集計の5シートを出力します（定款第35条の決算書類作成、第23条の監事監査に対応）。</p>
+    <button class="btn btn-p" onclick="exportExcel()">Excelをダウンロード</button>
+  </div>
+</section>
+
+<!-- ========== 資金繰り・予算 ========== -->
+<section id="page-cashflow" class="page">
+  <div class="card">
+    <h2>資金繰り表（月次・事業年度ベース）</h2>
+    <div class="grid g3" style="margin-bottom:14px">
+      <div><label>期首残高（<span id="cfFyLabel1"></span>年4月1日時点の現預金残高）</label><input type="number" id="cfOpening" placeholder="0" oninput="renderCashflow()"></div>
+      <div style="align-self:end;display:flex;gap:8px">
+        <button class="btn btn-s btn-sm" onclick="saveBudget()">残高・予算をまとめて保存</button>
+        <button class="btn btn-p btn-sm" onclick="exportCashflowExcel()">資金繰り・予算をExcel出力</button>
+      </div>
+    </div>
+    <div class="tbl-wrap"><table class="data" id="cfTable"><thead><tr id="cfHeadRow"></tr></thead><tbody id="cfBody"></tbody></table></div>
+    <p class="hint" style="margin-top:8px">収入は入金済み（請求書：入金日／単独領収書：発行日）ベース、支出は経費の支払日ベースで集計。月末残高がマイナスの月は赤字表示します。</p>
+  </div>
+
+  <div class="card">
+    <h2>今後の入出金予定</h2>
+    <div class="sumcards" id="cfForecastCards"></div>
+    <div class="grid g2">
+      <div>
+        <h3 style="font-size:13px;color:var(--ink-soft);margin-bottom:6px">入金予定（発行済・未入金の請求書）</h3>
+        <div class="tbl-wrap"><table class="data"><thead><tr><th>期限</th><th>請求先</th><th class="num">金額</th></tr></thead><tbody id="cfInTbody"></tbody></table></div>
+      </div>
+      <div>
+        <h3 style="font-size:13px;color:var(--ink-soft);margin-bottom:6px">支出予定（未精算の立替金）</h3>
+        <div class="tbl-wrap"><table class="data"><thead><tr><th>支払日</th><th>立替者</th><th class="num">金額</th></tr></thead><tbody id="cfOutTbody"></tbody></table></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>予算対比（<span id="cfFyLabel2"></span>年度・年間予算）</h2>
+    <p class="hint" style="margin-bottom:10px">年間の予算額を科目ごとに入力し、「残高・予算をまとめて保存」で保存してください。実績は現在の集計データから自動反映されます。</p>
+    <h3 style="font-size:13px;color:var(--ai);margin:10px 0 6px">収益科目</h3>
+    <div class="tbl-wrap"><table class="data"><thead><tr><th>科目</th><th style="width:140px">年間予算</th><th class="num">実績</th><th class="num">差異</th><th class="num">達成率</th></tr></thead><tbody id="budgetRevBody"></tbody></table></div>
+    <h3 style="font-size:13px;color:var(--ai);margin:16px 0 6px">費用科目</h3>
+    <div class="tbl-wrap"><table class="data"><thead><tr><th>科目</th><th style="width:140px">年間予算</th><th class="num">実績</th><th class="num">差異</th><th class="num">執行率</th></tr></thead><tbody id="budgetExpBody"></tbody></table></div>
+  </div>
+</section>
+
+<!-- ========== マスタ設定 ========== -->
+<section id="page-master" class="page">
+  <div class="card">
+    <h2>法人情報（帳票に反映）</h2>
+    <div class="grid g3">
+      <div><label>法人名</label><input id="mCorpName"></div>
+      <div><label>所在地</label><input id="mAddress"></div>
+      <div><label>代表者</label><input id="mRep"></div>
+      <div><label>電話番号</label><input id="mTel"></div>
+      <div><label>メール</label><input id="mEmail"></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>インボイス（適格請求書発行事業者）</h2>
+    <div class="grid g3">
+      <div><label>登録番号（T＋13桁）</label><input id="mInvoiceRegNo" placeholder="登録後に入力"></div>
+      <div><label>登録日</label><input type="date" id="mInvoiceRegDate"></div>
+    </div>
+    <p class="hint">未入力の間は帳票に登録番号を印字しません（区分記載請求書として発行）。登録番号と登録日を入力すると、登録日以降の日付の帳票へ自動印字されます。</p>
+  </div>
+  <div class="card">
+    <h2>振込先（請求書に反映）</h2>
+    <div class="grid g4">
+      <div><label>銀行名</label><input id="mBank"></div>
+      <div><label>支店名</label><input id="mBranch"></div>
+      <div><label>口座種別</label><select id="mAccType"><option>普通</option><option>当座</option></select></div>
+      <div><label>口座番号</label><input id="mAccNo"></div>
+      <div style="grid-column:span 2"><label>口座名義</label><input id="mAccName"></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>但し書き候補（領収書用・1行1件）</h2>
+    <textarea id="mProvisos" rows="5"></textarea>
+  </div>
+  <div class="card">
+    <h2>年度会費（会費管理・定款第8条）</h2>
+    <div class="grid g3">
+      <div><label>正会員 年会費（円）</label><input type="number" id="mFeeRegular" min="0"></div>
+      <div><label>賛助会員 年会費（円）</label><input type="number" id="mFeeSupport" min="0"></div>
+    </div>
+    <p class="hint">額は社員総会の決議で確定後に入力。会員（取引先マスタの会員区分）への請求書・領収書の但し書きに利用します。</p>
+  </div>
+  <div class="actions"><button class="btn btn-p" onclick="saveSettings()">マスタを保存する</button></div>
+  <div class="card" style="border-color:var(--shu)">
+    <h2 style="color:var(--shu)">v1データ移行（1回だけ実行）</h2>
+    <p class="hint" style="margin-bottom:10px">旧形式の証憑番号（R2026-XXX）を TP-E-2026-XXX へ一括変換し、全経費データに事業年度（fiscalYear）を付与します。連番は維持されます。実行前にFirebaseコンソールでのバックアップ（エクスポート）を推奨します。</p>
+    <button class="btn btn-danger" onclick="migrateV1()">移行を実行する</button>
+    <div id="migrateResult" class="hint" style="margin-top:8px"></div>
+  </div>
+</section>
+
+</main>
+
+<!-- ========== モーダル ========== -->
+<div class="modal-bg" id="editModal"><div class="modal">
+  <h3>経費の編集　<span class="mono" id="emNo"></span></h3>
+  <input type="hidden" id="emId">
+  <div class="grid g2">
+    <div><label>支払日</label><input type="date" id="emDate"></div>
+    <div><label>勘定科目</label><select id="emKamoku"></select></div>
+    <div><label>支払区分</label><select id="emPayType"></select></div>
+    <div><label>支払先</label><select id="emParty" onchange="toggleVendorFree('emParty','emVendorFree')"></select><input id="emVendorFree" placeholder="支払先名を入力" style="display:none;margin-top:6px"></div>
+    <div><label>事業名／案件名</label><input id="emProject"></div>
+    <div>
+      <label id="emAmountExLabel">金額（税抜）</label>
+      <div style="display:flex;gap:12px;margin:2px 0 5px;font-size:12px;font-weight:400">
+        <label style="display:flex;gap:3px;align-items:center"><input type="radio" name="emAmountMode" value="ex" checked onchange="toggleEditAmountMode()" style="width:auto">税抜で入力</label>
+        <label style="display:flex;gap:3px;align-items:center"><input type="radio" name="emAmountMode" value="in" onchange="toggleEditAmountMode()" style="width:auto">税込で入力</label>
+      </div>
+      <input type="number" id="emAmountEx" oninput="calcEditTax()">
+    </div>
+    <div><label>税率</label><select id="emTaxRate" onchange="calcEditTax()"><option value="0.10">10%</option><option value="0.08">8%</option><option value="0">対象外</option></select><div class="hint" id="emTaxHint" style="margin-top:6px"></div></div>
+    <div><label id="emAmountInLabel">税込金額</label><input type="number" id="emAmountIn" oninput="calcEditTax()" readonly style="background:var(--sand)"></div>
+    <div><label>品目・摘要</label><input id="emDesc"></div>
+    <div><label>インボイス</label><select id="emInvoice"><option>あり</option><option>なし</option><option>不要</option></select></div>
+    <div><label>証憑種類</label><select id="emProof"><option>領収書</option><option>レシート</option><option>請求書</option><option>クレジット明細</option><option>振込明細</option><option>その他</option></select></div>
+    <div><label>画像リンク</label><input id="emImageUrl"></div>
+  </div>
+  <div style="margin-top:8px"><label>備考</label><input id="emNote"></div>
+  <div id="emSettledInfo" class="hint" style="margin-top:8px"></div>
+  <div class="actions"><button class="btn btn-p" onclick="updateExpense()">更新する</button><button class="btn btn-s" onclick="closeModal('editModal')">キャンセル</button></div>
+</div></div>
+
+<div class="modal-bg" id="settleModal"><div class="modal">
+  <h3>立替金の精算</h3>
+  <input type="hidden" id="smId">
+  <p id="smInfo" style="margin-bottom:12px"></p>
+  <div class="grid g2">
+    <div><label class="req">精算日</label><input type="date" id="smDate"></div>
+    <div><label>精算方法</label><select id="smMethod"><option>銀行振込</option><option>現金手渡し</option><option>口座振替</option><option>その他</option></select></div>
+  </div>
+  <div style="margin-top:8px"><label>備考</label><input id="smNote"></div>
+  <div class="actions"><button class="btn btn-green" onclick="doSettle()">精算済みにする</button><button class="btn btn-s" onclick="closeModal('settleModal')">キャンセル</button></div>
+</div></div>
+
+<div class="modal-bg" id="bulkSettleModal"><div class="modal">
+  <h3>一括精算</h3>
+  <div id="bsList" style="max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:8px;margin-bottom:12px;font-size:12.5px"></div>
+  <div class="grid g2">
+    <div><label class="req">精算日</label><input type="date" id="bsDate"></div>
+    <div><label>精算方法</label><select id="bsMethod"><option>銀行振込</option><option>現金手渡し</option><option>口座振替</option><option>その他</option></select></div>
+  </div>
+  <div style="margin-top:8px"><label>備考</label><input id="bsNote"></div>
+  <div class="actions"><button class="btn btn-green" onclick="doBulkSettle()">まとめて精算済みにする</button><button class="btn btn-s" onclick="closeModal('bulkSettleModal')">キャンセル</button></div>
+</div></div>
+
+<div class="modal-bg" id="payModal"><div class="modal">
+  <h3>入金消込　<span class="mono" id="pmNo"></span></h3>
+  <input type="hidden" id="pmId">
+  <div class="grid g2">
+    <div><label class="req">入金日</label><input type="date" id="pmDate"></div>
+    <div><label>入金額</label><input type="number" id="pmAmount"></div>
+  </div>
+  <div class="actions"><button class="btn btn-green" onclick="doMarkPaid()">入金済みにする</button><button class="btn btn-s" onclick="closeModal('payModal')">キャンセル</button></div>
+</div></div>
+
+<div class="msg" id="msg"></div>
+
+<!-- ========== 印刷テンプレート ========== -->
+<div id="printArea">
+  <!-- 請求書 -->
+  <div class="doc" id="printInvoice" style="display:none">
+    <div class="doctitle">請求書</div>
+    <div class="meta">
+      <div>
+        <div class="mono" style="font-family:inherit">請求書番号：<span id="piNo"></span></div>
+        <div>発行日：<span id="piDate"></span></div>
+        <div>支払期限：<span id="piDue"></span></div>
+        <div style="margin-top:6mm" class="to"><span id="piTo"></span>　御中</div>
+        <div>件名：<span id="piTitle"></span></div>
+      </div>
+      <div class="issuer">
+        <div class="corp" id="piCorp"></div>
+        <div id="piAddr"></div>
+        <div id="piRep"></div>
+        <div id="piTel"></div>
+        <div class="regno" id="piRegNo"></div>
+      </div>
+    </div>
+    <div>下記の通りご請求申し上げます。</div>
+    <div class="amount-box"><span>ご請求金額</span><span class="yen" id="piTotal"></span></div>
+    <table class="items"><thead><tr><th style="width:8mm">No.</th><th>内容</th><th style="width:14mm">数量</th><th style="width:12mm">単位</th><th style="width:22mm">単価</th><th style="width:24mm">金額</th><th style="width:12mm">税率</th></tr></thead><tbody id="piItems"></tbody></table>
+    <div class="totals">
+      <div><span>小計（税抜）</span><span id="piSub"></span></div>
+      <div><span>消費税10%（対象 <span id="piBase10"></span>）</span><span id="piT10"></span></div>
+      <div><span>消費税8%（対象 <span id="piBase8"></span>）</span><span id="piT8"></span></div>
+      <div class="gt"><span>合計</span><span id="piGT"></span></div>
+    </div>
+    <div class="bank"><div class="bt">お振込先</div><div id="piBank"></div></div>
+    <div class="note">・恐れ入りますが、振込手数料は貴社にてご負担ください。<span id="piRegNote"></span></div>
+  </div>
+  <!-- 領収書 -->
+  <div class="doc" id="printReceipt" style="display:none">
+    <div class="doctitle">領収書</div>
+    <div class="meta">
+      <div>
+        <div>領収書番号：<span id="prNo"></span></div>
+        <div style="margin-top:6mm" class="to"><span id="prTo"></span>　様</div>
+      </div>
+      <div class="issuer"><div>発行日：<span id="prDate"></span></div></div>
+    </div>
+    <div class="amount-box"><span>領収金額</span><span class="yen" id="prAmount"></span></div>
+    <div class="proviso">但し、<span id="prProviso"></span>　として</div>
+    <div>上記正に領収いたしました。</div>
+    <div class="meta" style="margin-top:8mm">
+      <div style="font-size:9.5pt">
+        <div>支払方法：<span id="prMethod"></span></div>
+        <div>税率：<span id="prRate"></span>　／　税抜金額：<span id="prEx"></span>　／　消費税額：<span id="prTax"></span></div>
+        <div class="regno" id="prRegNo"></div>
+        <div id="prReissue" style="font-weight:600"></div>
+      </div>
+      <div class="issuer">
+        <div class="corp" id="prCorp"></div>
+        <div id="prAddr"></div>
+        <div id="prRep"></div>
+      </div>
+    </div>
+  </div>
+  <!-- 領収書（まとめて発行・複数件を連続印刷） -->
+  <div id="printReceiptsBulk" style="display:none"></div>
+</div>
+
+<script>
+/* =========================================================
+   一般社団法人 Team P 会計管理アプリ v2
+   仕様書v2（2026-07-05）準拠／単一ファイル構成
+   ========================================================= */
+
+// ★ここにFirebaseコンソールからコピーしたconfigを貼る★
+const firebaseConfig = {
+  apiKey: "AIzaSyDZq5jRXy4VZxwgI1m9ZfhPAWsKyCTzDNY",
+  authDomain: "pkeihiseisan.firebaseapp.com",
+  projectId: "pkeihiseisan",
+  storageBucket: "pkeihiseisan.firebasestorage.app",
+  messagingSenderId: "160275801146",
+  appId: "1:160275801146:web:aa8da14d5b9bc89f888103"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const auth = firebase.auth();
+
+/* ===== 定数 ===== */
+const KAMOKU_EXP = {
+  "繰延資産": ["創立費", "開業費"],
+  "人件費": ["役員報酬", "給料手当", "法定福利費", "福利厚生費"],
+  "経費": ["会議費","接待交際費","旅費交通費","通信費","消耗品費","印刷製本費","広告宣伝費","地代家賃","賃借料","水道光熱費","保険料","修繕費","支払手数料","支払報酬料","業務委託費","諸会費","新聞図書費","研修費","減価償却費","雑費"],
+  "税金": ["租税公課"],
+  "固定資産": ["器具備品", "ソフトウェア"]
+};
+const KAMOKU_REV = ["受取会費（正会員）","受取会費（賛助会員）","事業収益（受託収益）","事業収益（参加費収益）","受取寄付金・協賛金","受取利息・雑収益","基金受入（純資産・収益外）"];
+const PAY_TYPES = ["立替（代表理事・土井）","立替（理事・越宗）","立替（理事・安井）","立替（事務局・石川）","法人口座","法人カード"];
+const PAY_LABELS = {"立替（代表理事・土井）":"代表理事・土井","立替（理事・越宗）":"理事・越宗","立替（理事・安井）":"理事・安井","立替（事務局・石川）":"事務局・石川","法人口座":"法人口座","法人カード":"法人カード"};
+const isTatekaeType = t => (t||"").includes("立替");
+const STATUS_LABEL = {draft:"下書き", issued:"発行済", paid:"入金済", cancel:"取消"};
+const STATUS_BADGE = {draft:"bd-draft", issued:"bd-issued", paid:"bd-paid", cancel:"bd-cancel"};
+const RECEIPT_STATUS_LABEL = {issued:"発行済", void:"取消"};
+const RECEIPT_STATUS_BADGE = {issued:"bd-issued", void:"bd-cancel"};
+
+/* ===== 状態 ===== */
+var SETTINGS = null;
+var PARTIES = [];   // {id(docId), partyId, name, ...}
+var EXPENSES = [];  // 全件（fiscalYearで画面側フィルタ）
+var SALES = [];
+var RECEIPTS = [];
+var REISSUE_OF = null; // 差し替え発行中の元領収書ID
+var BUDGETS = {}; // { [fiscalYear]: {openingCash, revenue:{科目:額}, expense:{科目:額}} }
+let CURRENT_FY = fiscalYearOf(todayStr());
+let unsubs = [];
+
+/* ===== 汎用 ===== */
+/* 消費税は浮動小数点誤差を避けるため整数演算（切捨て） */
+function taxOf(baseEx, r){ const pct=Math.round((r||0)*100); return pct ? Math.floor(baseEx*pct/100) : 0; }
+function taxIncludedOf(amountIn, r){ const pct=Math.round((r||0)*100); return pct ? Math.floor(amountIn*pct/(100+pct)) : 0; }
+/* 税率セレクトのoption値（"0.10"/"0.08"/"0"）は、0.1のような数値をString()化すると
+   "0.1"になり一致しなくなるため、必ずこの関数経由でoption値の文字列に変換すること */
+function taxRateOptionValue(r){
+  if(r === 0.08) return "0.08";
+  if(r === 0) return "0";
+  return "0.10";
+}
+function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function fiscalYearOf(dateStr){ if(!dateStr) return CURRENT_FY; const [y,m]=dateStr.split("-").map(Number); return m>=4 ? y : y-1; }
+function yen(n){ return (n==null||isNaN(n)) ? "" : "¥" + Number(n).toLocaleString(); }
+function esc(s){ return String(s??"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function showMsg(t){ const m=document.getElementById("msg"); m.textContent=t; m.style.display="block"; clearTimeout(m._t); m._t=setTimeout(()=>m.style.display="none", 2600); }
+function openModal(id){ document.getElementById(id).classList.add("open"); }
+function closeModal(id){ document.getElementById(id).classList.remove("open"); }
+function nowIso(){ return new Date().toISOString(); }
+function uid(){ return auth.currentUser ? auth.currentUser.email : "unknown"; }
+function partyById(pid){ return PARTIES.find(p=>p.partyId===pid); }
+function partyName(pid, fallback){ const p=partyById(pid); return p ? p.name : (fallback||""); }
+
+/* ===== 認証 ===== */
+function doLogin(){
+  const email=document.getElementById("authEmail").value.trim();
+  const pass=document.getElementById("authPass").value;
+  document.getElementById("authErr").textContent="";
+  auth.signInWithEmailAndPassword(email, pass).catch(e=>{
+    document.getElementById("authErr").textContent="ログインできません：メールアドレスまたはパスワードを確認してください。";
+  });
+}
+function doLogout(){ auth.signOut(); }
+document.getElementById("authPass").addEventListener("keydown", e=>{ if(e.key==="Enter") doLogin(); });
+
+auth.onAuthStateChanged(user=>{
+  if(user){
+    document.getElementById("authOverlay").style.display="none";
+    startApp();
+  }else{
+    document.getElementById("authOverlay").style.display="flex";
+    unsubs.forEach(u=>u()); unsubs=[];
+  }
+});
+
+/* ===== 起動 ===== */
+function startApp(){
+  buildFySelect();
+  buildKamokuSelects();
+  buildPayTypeSelects();
+  document.getElementById("eDate").value = todayStr();
+  document.getElementById("sIssueDate").value = todayStr();
+  document.getElementById("rDate").value = todayStr();
+  document.getElementById("rbDate").value = todayStr();
+  subscribeAll();
+}
+function buildFySelect(){
+  const sel=document.getElementById("globalFy");
+  sel.innerHTML="";
+  const nowFy = fiscalYearOf(todayStr());
+  for(let y=2026; y<=nowFy+1; y++){
+    sel.innerHTML += `<option value="${y}" ${y===CURRENT_FY?"selected":""}>${y}年度（${y}/4〜${y+1}/3）</option>`;
+  }
+}
+function onFyChange(){
+  CURRENT_FY = Number(document.getElementById("globalFy").value);
+  renderAll(); refreshPreviews();
+}
+function buildKamokuSelects(){
+  let opts = "";
+  for(const [g, list] of Object.entries(KAMOKU_EXP)){
+    opts += `<optgroup label="${g}">` + list.map(k=>`<option>${k}</option>`).join("") + `</optgroup>`;
+  }
+  document.getElementById("eKamoku").innerHTML = opts;
+  document.getElementById("emKamoku").innerHTML = opts;
+  document.getElementById("fKamoku").innerHTML = `<option value="">勘定科目：すべて</option>` + opts;
+  const rev = KAMOKU_REV.map(k=>`<option>${k}</option>`).join("");
+  document.getElementById("sKamoku").innerHTML = rev;
+  document.getElementById("rKamoku").innerHTML = rev;
+  document.getElementById("rbKamoku").innerHTML = rev;
+}
+function buildPayTypeSelects(){
+  const opts = PAY_TYPES.map(t=>`<option value="${t}">${PAY_LABELS[t]}</option>`).join("");
+  document.getElementById("ePayType").innerHTML = opts;
+  document.getElementById("emPayType").innerHTML = opts;
+  const persons = PAY_TYPES.filter(isTatekaeType).map(t=>`<option value="${t}">${PAY_LABELS[t]}</option>`).join("");
+  document.getElementById("fTatekaePerson").innerHTML = `<option value="">立替者：全員</option>` + persons;
+}
+
+/* ===== リアルタイム購読 ===== */
+function subscribeAll(){
+  unsubs.forEach(u=>u()); unsubs=[];
+  unsubs.push(db.collection("settings").doc("main").onSnapshot(d=>{ SETTINGS = d.exists ? d.data() : defaultSettings(); fillSettingsForm(); refreshProvisoList(); }));
+  unsubs.push(db.collection("parties").orderBy("partyId").onSnapshot(s=>{ PARTIES = s.docs.map(d=>({_id:d.id, ...d.data()})); fillPartySelects(); renderAll(); }));
+  unsubs.push(db.collection("expenses").onSnapshot(s=>{ EXPENSES = s.docs.map(d=>({_id:d.id, ...d.data()})); renderAll(); refreshPreviews(); refreshProjectList(); }));
+  unsubs.push(db.collection("sales").onSnapshot(s=>{ SALES = s.docs.map(d=>({_id:d.id, ...d.data()})); renderAll(); refreshPreviews(); }));
+  unsubs.push(db.collection("issuedReceipts").onSnapshot(s=>{ RECEIPTS = s.docs.map(d=>({_id:d.id, ...d.data()})); renderAll(); refreshPreviews(); }));
+  unsubs.push(db.collection("budgets").onSnapshot(s=>{ BUDGETS = {}; s.docs.forEach(d=>{ BUDGETS[d.id] = d.data(); }); renderAll(); }));
+}
+function defaultSettings(){
+  return { corpName:"一般社団法人 Team P", address:"岡山市東区城東台西3丁目15-8", rep:"代表理事　土井 雅人",
+    tel:"", email:"", invoiceRegNo:"", invoiceRegDate:"", bank:"", branch:"", accType:"普通", accNo:"", accName:"一般社団法人 Team P",
+    provisos:"会費として\n業務委託料として\n企画運営費として\n資料作成費として\n参加費として\n協賛金として", feeRegular:"", feeSupport:"" };
+}
+
+/* ===== 採番（counters コレクション・トランザクション） =====
+   系列E/I/R：事業年度ごとにリセット → TP-E-2026-001
+   系列P（取引先）：通し番号 → T-001 */
+async function nextNumber(series, fy){
+  const ref = db.collection("counters").doc(series + "-" + fy);
+  return db.runTransaction(async tx=>{
+    const d = await tx.get(ref);
+    const last = d.exists ? (d.data().last||0) : 0;
+    const n = last + 1;
+    tx.set(ref, {last:n}, {merge:true});
+    return `TP-${series}-${fy}-` + String(n).padStart(3,"0");
+  });
+}
+async function nextPartyId(){
+  const ref = db.collection("counters").doc("P-all");
+  return db.runTransaction(async tx=>{
+    const d = await tx.get(ref);
+    const n = (d.exists ? (d.data().last||0) : 0) + 1;
+    tx.set(ref, {last:n}, {merge:true});
+    return "T-" + String(n).padStart(3,"0");
+  });
+}
+/* 画面用の仮番号（保存時に確定） */
+function previewNumber(series, fy){
+  const arr = series==="E" ? EXPENSES : series==="I" ? SALES : RECEIPTS;
+  const prefix = `TP-${series}-${fy}-`;
+  let max = 0;
+  arr.forEach(x=>{
+    const id = series==="E" ? x.receiptId : series==="I" ? x.invoiceId : x.receiptId;
+    if(id && id.startsWith(prefix)){ const n=Number(id.slice(prefix.length)); if(n>max) max=n; }
+  });
+  return prefix + String(max+1).padStart(3,"0") + "（仮）";
+}
+function refreshPreviews(){
+  const eFy = fiscalYearOf(document.getElementById("eDate").value || todayStr());
+  document.getElementById("entryPreviewNo").textContent = previewNumber("E", eFy);
+  const sFy = fiscalYearOf(document.getElementById("sIssueDate").value || todayStr());
+  document.getElementById("salesPreviewNo").textContent = previewNumber("I", sFy);
+  const rFy = fiscalYearOf(document.getElementById("rDate").value || todayStr());
+  document.getElementById("rcPreviewNo").textContent = previewNumber("R", rFy);
+}
+document.getElementById("eDate").addEventListener("change", refreshPreviews);
+document.getElementById("sIssueDate").addEventListener("change", refreshPreviews);
+document.getElementById("rDate").addEventListener("change", refreshPreviews);
+
+/* ===== マスタ設定 ===== */
+function fillSettingsForm(){
+  if(!SETTINGS) return;
+  const m = SETTINGS;
+  const set=(id,v)=>{ document.getElementById(id).value = v ?? ""; };
+  set("mCorpName",m.corpName); set("mAddress",m.address); set("mRep",m.rep); set("mTel",m.tel); set("mEmail",m.email);
+  set("mInvoiceRegNo",m.invoiceRegNo); set("mInvoiceRegDate",m.invoiceRegDate);
+  set("mBank",m.bank); set("mBranch",m.branch); set("mAccType",m.accType||"普通"); set("mAccNo",m.accNo); set("mAccName",m.accName);
+  set("mProvisos",m.provisos); set("mFeeRegular",m.feeRegular); set("mFeeSupport",m.feeSupport);
+}
+function saveSettings(){
+  const v=id=>document.getElementById(id).value.trim();
+  const data = { corpName:v("mCorpName"), address:v("mAddress"), rep:v("mRep"), tel:v("mTel"), email:v("mEmail"),
+    invoiceRegNo:v("mInvoiceRegNo"), invoiceRegDate:v("mInvoiceRegDate"),
+    bank:v("mBank"), branch:v("mBranch"), accType:v("mAccType"), accNo:v("mAccNo"), accName:v("mAccName"),
+    provisos:document.getElementById("mProvisos").value, feeRegular:v("mFeeRegular"), feeSupport:v("mFeeSupport"),
+    updatedAt: nowIso(), updatedBy: uid() };
+  db.collection("settings").doc("main").set(data, {merge:true}).then(()=>showMsg("マスタを保存しました"));
+}
+function refreshProvisoList(){
+  const dl=document.getElementById("provisoList");
+  dl.innerHTML = (SETTINGS?.provisos||"").split("\n").filter(x=>x.trim()).map(x=>`<option value="${esc(x.trim().replace(/として$/,""))}">`).join("");
+}
+function refreshProjectList(){
+  const set = new Set();
+  EXPENSES.forEach(e=>{ if(e.project) set.add(e.project); });
+  SALES.forEach(s=>{ if(s.project) set.add(s.project); });
+  document.getElementById("projectList").innerHTML = [...set].map(p=>`<option value="${esc(p)}">`).join("");
+}
+
+/* ===== 取引先 ===== */
+function fillPartySelects(){
+  const vendors = PARTIES.filter(p=>p.isActive!==false && (p.type||[]).includes("vendor"));
+  const customers = PARTIES.filter(p=>p.isActive!==false && (p.type||[]).includes("customer"));
+  const opt = (list, allowFree) => `<option value="">— 選択してください —</option>`
+    + list.map(p=>`<option value="${p.partyId}">${p.partyId}　${esc(p.name)}</option>`).join("")
+    + (allowFree ? `<option value="__FREE__">— 自由入力（マスタ未登録の支払先）—</option>` : "");
+  document.getElementById("eParty").innerHTML = opt(vendors, true);
+  document.getElementById("emParty").innerHTML = opt(PARTIES, true);
+  document.getElementById("sParty").innerHTML = opt(customers, false);
+  document.getElementById("rParty").innerHTML = opt(customers, false);
+  fillBulkPartyCheckboxes(customers);
+}
+function fillBulkPartyCheckboxes(customers){
+  customers = customers || PARTIES.filter(p=>p.isActive!==false && (p.type||[]).includes("customer"));
+  const box = document.getElementById("rbPartyList");
+  if(!box) return;
+  box.innerHTML = customers.map(p=>
+    `<label style="display:flex;align-items:center;gap:6px;padding:2px 0;font-weight:400;font-size:13px">
+      <input type="checkbox" class="rbParty" value="${p.partyId}" onchange="updateBulkPartyCount()" style="width:auto">
+      ${p.partyId}　${esc(p.name)}
+    </label>`).join("") || `<div class="hint">取引先マスタに宛先候補（入金先区分）がありません。取引先タブから登録してください。</div>`;
+  updateBulkPartyCount();
+}
+function updateBulkPartyCount(){
+  const n = document.querySelectorAll(".rbParty:checked").length;
+  const el = document.getElementById("rbPartyCount");
+  if(el) el.textContent = n;
+}
+function toggleVendorFree(selId, inputId){
+  const sel = document.getElementById(selId);
+  const inp = document.getElementById(inputId);
+  if(sel.value === "__FREE__"){ inp.style.display = "block"; inp.focus(); }
+  else { inp.style.display = "none"; inp.value = ""; }
+}
+async function saveParty(){
+  const name = document.getElementById("pName").value.trim();
+  if(!name){ showMsg("名称を入力してください"); return; }
+  const type = [];
+  if(document.getElementById("pTypeCustomer").checked) type.push("customer");
+  if(document.getElementById("pTypeVendor").checked) type.push("vendor");
+  if(!type.length){ showMsg("区分（入金先／支払先）を選択してください"); return; }
+  const data = { name, kana:document.getElementById("pKana").value.trim(), type,
+    memberClass:document.getElementById("pMemberClass").value,
+    address:document.getElementById("pAddress").value.trim(), contact:document.getElementById("pContact").value.trim(),
+    invoiceNo:document.getElementById("pInvoiceNo").value.trim(), bankInfo:document.getElementById("pBankInfo").value.trim(),
+    note:document.getElementById("pNote").value.trim(), isActive:true, updatedAt:nowIso(), updatedBy:uid() };
+  const editing = document.getElementById("pEditingId").value;
+  if(editing){
+    await db.collection("parties").doc(editing).set(data, {merge:true});
+    showMsg("取引先を更新しました");
+  }else{
+    data.partyId = await nextPartyId();
+    data.createdAt = nowIso(); data.createdBy = uid();
+    await db.collection("parties").add(data);
+    showMsg(`取引先を登録しました（${data.partyId}）`);
+  }
+  resetPartyForm();
+}
+function resetPartyForm(){
+  ["pName","pKana","pAddress","pContact","pInvoiceNo","pBankInfo","pNote","pEditingId"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("pMemberClass").value="非会員";
+  document.getElementById("pTypeCustomer").checked=false;
+  document.getElementById("pTypeVendor").checked=false;
+  document.getElementById("partyFormTitle").textContent="取引先の登録";
+  document.getElementById("partySaveBtn").textContent="登録する";
+}
+function editParty(docId){
+  const p = PARTIES.find(x=>x._id===docId); if(!p) return;
+  document.getElementById("pEditingId").value = docId;
+  document.getElementById("pName").value = p.name||"";
+  document.getElementById("pKana").value = p.kana||"";
+  document.getElementById("pMemberClass").value = p.memberClass||"非会員";
+  document.getElementById("pTypeCustomer").checked = (p.type||[]).includes("customer");
+  document.getElementById("pTypeVendor").checked = (p.type||[]).includes("vendor");
+  document.getElementById("pAddress").value = p.address||"";
+  document.getElementById("pContact").value = p.contact||"";
+  document.getElementById("pInvoiceNo").value = p.invoiceNo||"";
+  document.getElementById("pBankInfo").value = p.bankInfo||"";
+  document.getElementById("pNote").value = p.note||"";
+  document.getElementById("partyFormTitle").textContent = `取引先の編集（${p.partyId}）`;
+  document.getElementById("partySaveBtn").textContent = "更新する";
+  window.scrollTo({top:0, behavior:"smooth"});
+}
+function deactivateParty(docId){
+  const p = PARTIES.find(x=>x._id===docId); if(!p) return;
+  if(!confirm(`${p.partyId} ${p.name} を無効化しますか？（過去の実績は残ります）`)) return;
+  db.collection("parties").doc(docId).set({isActive:false, updatedAt:nowIso(), updatedBy:uid()}, {merge:true}).then(()=>showMsg("無効化しました"));
+}
+
+/* ===== ピリリ会名簿からの一括登録（2026-07作成） =====
+   ピリリ会メンバー名簿（PDF・98名）に記載の所属先を、ピリリ会統合名簿（Excel）の住所と
+   氏名で突き合わせた候補データ。個人（職人・落語家等で会社に非該当）は除外済み。
+   住所が統合名簿に無いものは address を空にし、note に「住所要確認」を付記している。 */
+const PIRIRI_IMPORT_DATA = [
+  {
+    "name": "テレビせとうち株式会社",
+    "address": "〒700-8677 岡山県岡山市北区柳町2-1-1",
+    "note": "ピリリ会名簿より一括登録（参加者：土井 雅人・仮谷 寛志・天野 憲一郎・三宅 範尚・増田 健一郎・有信 由美子・大本 徹弥）"
+  },
+  {
+    "name": "ホテルグランヴィア岡山",
+    "address": "〒700-8515 岡山県岡山市北区駅元町１−５",
+    "note": "ピリリ会名簿より一括登録（参加者：石川 三千代）"
+  },
+  {
+    "name": "備前化成株式会社",
+    "address": "〒709-0716 岡山県赤磐市徳富363",
+    "note": "ピリリ会名簿より一括登録（参加者：清水 富江）"
+  },
+  {
+    "name": "株式会社JTB",
+    "address": "〒105-7132 東京都港区東新橋1-5-2 汐留シティセンター",
+    "note": "ピリリ会名簿より一括登録（参加者：小田 亜希子）"
+  },
+  {
+    "name": "有限会社中山靴店",
+    "address": "〒700-0822 岡山県岡山市北区表町２丁目２−７７",
+    "note": "ピリリ会名簿より一括登録（参加者：中山 憲太郎）"
+  },
+  {
+    "name": "株式会社シーアールホールディング",
+    "address": "〒703-8282 岡山県岡山市中区平井6丁目15-34",
+    "note": "ピリリ会名簿より一括登録（参加者：大久保 泰造）"
+  },
+  {
+    "name": "株式会社システムズナカシマ",
+    "address": "〒700-0982 岡山県岡山市北区中島田町2丁目3-19 NXビル",
+    "note": "ピリリ会名簿より一括登録（参加者：沼元 昇）"
+  },
+  {
+    "name": "金田コーポレーション株式会社",
+    "address": "〒706-0001 岡山県玉野市田井６丁目７−６",
+    "note": "ピリリ会名簿より一括登録（参加者：畑島 美緒）"
+  },
+  {
+    "name": "エムテック株式会社",
+    "address": "〒704-8124岡山県岡山市東区西大寺五明429-6",
+    "note": "ピリリ会名簿より一括登録（参加者：吉田 泰之・三輪 和宏）"
+  },
+  {
+    "name": "自由民主党逢沢一郎議員夫人",
+    "address": "〒700-0933岡山市北区奥田1-2-3あいさわ一郎事務所",
+    "note": "ピリリ会名簿より一括登録（参加者：逢沢 俊枝）"
+  },
+  {
+    "name": "双葉電機株式会社",
+    "address": "〒702-8022 岡山県岡山市南区福成2丁目23番18号",
+    "note": "ピリリ会名簿より一括登録（参加者：岡﨑 友作）"
+  },
+  {
+    "name": "岡山シーガルズ株式会社",
+    "address": "〒700-0985 岡山県岡山市北区厚生町3-1-15",
+    "note": "ピリリ会名簿より一括登録（参加者：高田さゆり）"
+  },
+  {
+    "name": "林原美術館",
+    "address": "〒700-0823 岡山県岡山市北区丸の内2-7-15",
+    "note": "ピリリ会名簿より一括登録（参加者：谷一 尚）"
+  },
+  {
+    "name": "医療法人 サン・クリニック",
+    "address": "〒703-8205 岡山県岡山市中区中井2-15-13",
+    "note": "ピリリ会名簿より一括登録（参加者：萬 雅大・萬 もえ）"
+  },
+  {
+    "name": "株式会社成通",
+    "address": "〒700-0023 岡山県岡山市北区駅前町1丁目1番1号 成通ビル11階",
+    "note": "ピリリ会名簿より一括登録（参加者：千原 行喜）"
+  },
+  {
+    "name": "国立大学法人 岡山大学",
+    "address": "〒700-8530 岡山県岡山市北区津島中1-1-1",
+    "note": "ピリリ会名簿より一括登録（参加者：那須 保友・中山 雅敬）"
+  },
+  {
+    "name": "岡山県 企業と大学の共同研究センター",
+    "address": "〒700-8530 岡山県岡山市北区津島中3丁目1番1号 自然科学系総合研究棟6F",
+    "note": "ピリリ会名簿より一括登録（参加者：佐藤 兼郎）"
+  },
+  {
+    "name": "タツモ株式会社",
+    "address": "〒701-1221 岡山県岡山市北区芳賀5311",
+    "note": "ピリリ会名簿より一括登録（参加者：佐藤 泰之）"
+  },
+  {
+    "name": "岡山県観光連盟",
+    "address": "〒700-0822 岡山県岡山市北区表町1-5-1 岡山シンフォニービル2階",
+    "note": "ピリリ会名簿より一括登録（参加者：松野 理恵）"
+  },
+  {
+    "name": "株式会社重藤組",
+    "address": "〒702-8022 岡山市南区福成3-6-22",
+    "note": "ピリリ会名簿より一括登録（参加者：重藤 武士）"
+  },
+  {
+    "name": "ファジアーノおかやま",
+    "address": "〒700-0985 岡山県岡山市北区厚生町3-1-15 岡山商工会議所ビル6F",
+    "note": "ピリリ会名簿より一括登録（参加者：木村 正明）"
+  },
+  {
+    "name": "株式会社Cキューブ・コンサルティング",
+    "address": "〒700-0901 岡山県岡山市北区本町2番5号 ちゅうぎん駅前ビル4階",
+    "note": "ピリリ会名簿より一括登録（参加者：西原 立）"
+  },
+  {
+    "name": "PｗＣコンサルティング合同会社",
+    "address": "〒100-0004 東京都千代田区大手町1-2-1 Otemachi Oneタワー",
+    "note": "ピリリ会名簿より一括登録（参加者：安井 正樹）"
+  },
+  {
+    "name": "株式会社ニッカリ",
+    "address": "〒704-8125 岡山県岡山市東区西大寺川口465-1",
+    "note": "ピリリ会名簿より一括登録（参加者：杉本 宏）"
+  },
+  {
+    "name": "株式会社荒木組",
+    "address": "〒700-8540 岡山県岡山市北区天瀬4番33号",
+    "note": "ピリリ会名簿より一括登録（参加者：荒木 雷太）"
+  },
+  {
+    "name": "有限会社徳永商店",
+    "address": "〒705-0023 岡山県備前市伊里中684-1",
+    "note": "ピリリ会名簿より一括登録（参加者：徳永 琢）"
+  },
+  {
+    "name": "株式会社船井総合研究所",
+    "address": "〒104-0028 東京都中央区八重洲2-2-1 東京ミッドタウン八重洲",
+    "note": "ピリリ会名簿より一括登録（参加者：石川 麟太郎）"
+  },
+  {
+    "name": "ミサワホーム中国株式会社",
+    "address": "〒700-0971 岡山県岡山市北区野田2-13-17",
+    "note": "ピリリ会名簿より一括登録（参加者：海老谷 剛）"
+  },
+  {
+    "name": "Hiクラージュ株式会社",
+    "address": "〒700-0971 岡山県岡山市北区野田3丁目12番33号 Hiクラテス本社ビル1F",
+    "note": "ピリリ会名簿より一括登録（参加者：大森 貴弘）"
+  },
+  {
+    "name": "岡山県",
+    "address": "〒700-8570 岡山県岡山市北区内山下2-4-6",
+    "note": "ピリリ会名簿より一括登録（参加者：万代 洋士）"
+  },
+  {
+    "name": "株式会社長谷井商店",
+    "address": "〒700-0843 岡山県岡山市北区二日市町232番地",
+    "note": "ピリリ会名簿より一括登録（参加者：中島 俊子）"
+  },
+  {
+    "name": "株式会社TORYHOOP",
+    "address": "〒700-0985 岡山県岡山市北区厚生町3丁目1-15 岡山商工会議所ビル616",
+    "note": "ピリリ会名簿より一括登録（参加者：真鍋 洋志）"
+  },
+  {
+    "name": "株式会社岡山リベッツ",
+    "address": "岡山県岡山市北区野田1-8-17",
+    "note": "ピリリ会名簿より一括登録（参加者：大西 徹）"
+  },
+  {
+    "name": "株式会社山陽新聞社",
+    "address": "〒700-8634 岡山県岡山市北区柳町2-1-1",
+    "note": "ピリリ会名簿より一括登録（参加者：越宗 孝昌・山崎 晋介）"
+  },
+  {
+    "name": "丸田産業株式会社",
+    "address": "〒700-0901 岡山県岡山市北区本町6番36号（第一セントラルビル1号館9F）",
+    "note": "ピリリ会名簿より一括登録（参加者：伊原木 省五）"
+  },
+  {
+    "name": "株式会社クレスコ",
+    "address": "〒709-0625 岡山県岡山市東区上道北方１６５",
+    "note": "ピリリ会名簿より一括登録（参加者：川井 雄之介）"
+  },
+  {
+    "name": "魚春",
+    "address": "〒710-1102 岡山県倉敷市茶屋町早沖126",
+    "note": "ピリリ会名簿より一括登録（参加者：光畑 隆治）"
+  },
+  {
+    "name": "株式会社KKM川崎",
+    "address": "〒704-8116 岡山県岡山市東区西大寺中2丁目7番14号",
+    "note": "ピリリ会名簿より一括登録（参加者：川崎 一平）"
+  },
+  {
+    "name": "株式会社日圧機販",
+    "address": "〒701-0221 岡山県岡山市南区藤田２２１３−２ 日圧機販",
+    "note": "ピリリ会名簿より一括登録（参加者：渡邉 鉄平）"
+  },
+  {
+    "name": "（社福）ちとせ交友会",
+    "address": "〒102-0084 東京都千代田区二番町7番地5",
+    "note": "ピリリ会名簿より一括登録（参加者：山口 哲史）"
+  },
+  {
+    "name": "黒住教",
+    "address": "〒701-1212 岡山県岡山市北区尾上2770",
+    "note": "ピリリ会名簿より一括登録（参加者：黒住 宗芳・黒住 宗道）"
+  },
+  {
+    "name": "コアテック株式会社",
+    "address": "〒719-1121 岡山県総社市赤浜５００",
+    "note": "ピリリ会名簿より一括登録（参加者：藤井 茂）"
+  },
+  {
+    "name": "株式会社戸田レーシング",
+    "address": "〒714-1215 岡山県小田郡矢掛町中６４０−１",
+    "note": "ピリリ会名簿より一括登録（参加者：戸田 憲吾・戸田 幸男）"
+  },
+  {
+    "name": "株式会社未来機械",
+    "address": "〒761-0302 香川県高松市上林町584-1",
+    "note": "ピリリ会名簿より一括登録（参加者：三宅 徹）"
+  },
+  {
+    "name": "岡山県民共済生活協同組合",
+    "address": "〒703-8217岡山県岡山市中区土田706-12",
+    "note": "ピリリ会名簿より一括登録（参加者：小田 高広）"
+  },
+  {
+    "name": "協和ファインテック株式会社",
+    "address": "〒704-8193 岡山県岡山市東区金岡西町948-9",
+    "note": "ピリリ会名簿より一括登録（参加者：橋本 宗幸）"
+  },
+  {
+    "name": "株式会社ウィル",
+    "address": "〒709-0611 岡山県岡山市東区楢原７６０−２",
+    "note": "ピリリ会名簿より一括登録（参加者：山口 陵子）"
+  },
+  {
+    "name": "オーエムホールディングス株式会社",
+    "address": "〒700-0971 岡山県岡山市北区野田3丁目18-48",
+    "note": "ピリリ会名簿より一括登録（参加者：清迫 恭子・難波 圭太郎）"
+  },
+  {
+    "name": "岡山商工会議所",
+    "address": "〒700-8556 岡山県岡山市北区厚生町3-1-15",
+    "note": "ピリリ会名簿より一括登録（参加者：小山 恵子・高橋 邦彰）"
+  },
+  {
+    "name": "Tiara Co.;Ltd.",
+    "address": "〒700-0013 岡山県岡山市北区伊福町3-7-5",
+    "note": "ピリリ会名簿より一括登録（参加者：磯島 祐子・磯島 貴文）"
+  },
+  {
+    "name": "株式会社源吉兆庵ホールディングス",
+    "address": "〒700-0903 岡山県岡山市北区幸町7-28",
+    "note": "ピリリ会名簿より一括登録（参加者：岡田 佳子）"
+  },
+  {
+    "name": "美しいきもの 福岡屋",
+    "address": "〒700-0971 岡山県岡山市北区野田5丁目8-11",
+    "note": "ピリリ会名簿より一括登録（参加者：黒田 浩一）"
+  },
+  {
+    "name": "真庭市",
+    "address": "〒719-3292 岡山県真庭市久世2927番地2",
+    "note": "ピリリ会名簿より一括登録（参加者：太田 昇）"
+  },
+  {
+    "name": "セリオ株式会社",
+    "address": "〒703-8235 岡山県岡山市中区原尾島３丁目１６−４",
+    "note": "ピリリ会名簿より一括登録（参加者：本郷 旬）"
+  },
+  {
+    "name": "株式会社中原製作所",
+    "address": "〒703-8228 岡山県岡山市中区乙多見463",
+    "note": "ピリリ会名簿より一括登録（参加者：中原 さくら子）"
+  },
+  {
+    "name": "（一財）淳風会健康管理センター",
+    "address": "〒700-0913 岡山県岡山市北区大供2丁目3-1",
+    "note": "ピリリ会名簿より一括登録（参加者：稲岡 美穂）"
+  },
+  {
+    "name": "株式会社クラビズ",
+    "address": "〒710-0055 岡山県倉敷市阿知1丁目5-17 マルカンビル3F",
+    "note": "ピリリ会名簿より一括登録（参加者：秋葉 優一）"
+  },
+  {
+    "name": "Hiクラテス株式会社",
+    "address": "〒700-0971 岡山県岡山市北区野田3丁目12番33号",
+    "note": "ピリリ会名簿より一括登録（参加者：小林 宏次）"
+  },
+  {
+    "name": "株式会社フジワラテクノアート",
+    "address": "〒701-1133 岡山県岡山市北区富吉2827-3",
+    "note": "ピリリ会名簿より一括登録（参加者：藤原 加奈）"
+  },
+  {
+    "name": "ラ グランドコリーヌ ジャポン株式会社",
+    "address": "〒701-1133 岡山県岡山市北区富吉2387-5",
+    "note": "ピリリ会名簿より一括登録（参加者：大岡 弘武）"
+  },
+  {
+    "name": "株式会社吉備ケーブルテレビ",
+    "address": "〒716-0061 岡山県高梁市落合町１７６８−５",
+    "note": "ピリリ会名簿より一括登録（参加者：藤岡 孝・藤岡 由里子）"
+  },
+  {
+    "name": "両備ホールディングス株式会社",
+    "address": "〒700-0907 岡山県岡山市北区下石井2-10-12 杜の街グレースオフィススクエア5F",
+    "note": "ピリリ会名簿より一括登録（参加者：大上 真司）"
+  },
+  {
+    "name": "カバヤ食品株式会社",
+    "address": "〒709-2196 岡山県岡山市北区御津野々口1100",
+    "note": "ピリリ会名簿より一括登録（参加者：横部 新太郎）"
+  },
+  {
+    "name": "株式会社福森鐵工所",
+    "address": "〒700-0961 岡山県岡山市北区北長瀬本町13番25号",
+    "note": "ピリリ会名簿より一括登録（参加者：藤井 章貴）"
+  },
+  {
+    "name": "オカネツ工業株式会社",
+    "address": "〒704-8161 岡山県岡山市東区九蟠1119-1",
+    "note": "ピリリ会名簿より一括登録（参加者：和田 俊博）"
+  },
+  {
+    "name": "株式会社自光モータース",
+    "address": "〒718-0015 岡山県新見市石蟹２４８−１",
+    "note": "ピリリ会名簿より一括登録（参加者：岡﨑 允）"
+  },
+  {
+    "name": "株式会社辻本店",
+    "address": "〒717-0013 岡山県真庭市勝山116",
+    "note": "ピリリ会名簿より一括登録（参加者：辻 総一郎）"
+  },
+  {
+    "name": "合同会社セリフ",
+    "address": "〒707-0506 岡山県英田郡西粟倉村知社258番地1",
+    "note": "ピリリ会名簿より一括登録（参加者：羽田 知弘）"
+  },
+  {
+    "name": "ダイヤ工業株式会社",
+    "address": "〒701-0203 岡山県岡山市南区古新田１１２５",
+    "note": "ピリリ会名簿より一括登録（参加者：松尾 浩紀）"
+  },
+  {
+    "name": "岡本製甲株式会社",
+    "address": "〒710-1101 岡山県倉敷市茶屋町１９８８−１２",
+    "note": "ピリリ会名簿より一括登録（参加者：岡本 陽一）"
+  },
+  {
+    "name": "オーニック株式会社",
+    "address": "〒709-2343 岡山県加賀郡吉備中央町竹部1973",
+    "note": "ピリリ会名簿より一括登録（参加者：難波 健）"
+  },
+  {
+    "name": "株式会社Locals Market",
+    "address": "",
+    "note": "ピリリ会名簿より一括登録（参加者：永原 康史）／住所情報なし・要確認"
+  },
+  {
+    "name": "一般社団法人東かがわ地域経営機構",
+    "address": "",
+    "note": "ピリリ会名簿より一括登録（参加者：寺西 康博）／住所情報なし・要確認"
+  },
+  {
+    "name": "岡山水産物流通促進協議会",
+    "address": "",
+    "note": "ピリリ会名簿より一括登録（参加者：森下 倫年）／住所情報なし・要確認"
+  },
+  {
+    "name": "三ツ山レモン普及協議会・会長",
+    "address": "",
+    "note": "ピリリ会名簿より一括登録（参加者：應本 豊）／住所情報なし・要確認"
+  },
+  {
+    "name": "三ツ山レモン普及協議会・事務局長",
+    "address": "",
+    "note": "ピリリ会名簿より一括登録（参加者：大島 明敏）／住所情報なし・要確認"
+  }
+];
+
+function togglePiririImportList(){
+  const body = document.getElementById("piririImportBody");
+  const btn = document.getElementById("piririToggleBtn");
+  const show = body.style.display === "none";
+  body.style.display = show ? "block" : "none";
+  btn.textContent = show ? "候補一覧を閉じる" : "候補一覧を表示する";
+  if(show) renderPiririImportList();
+}
+function renderPiririImportList(){
+  const existingNames = new Set(PARTIES.map(p=>norm(p.name)));
+  function norm(s){ return (s||"").replace(/[\s　]/g,""); }
+  const tbody = document.getElementById("piririImportTbody");
+  tbody.innerHTML = PIRIRI_IMPORT_DATA.map((it,i)=>{
+    const dup = existingNames.has(norm(it.name));
+    const addrShow = it.address ? esc(it.address) : `<span style="color:#c0392b">（住所要確認）</span>`;
+    return `<tr style="${dup?'opacity:.45':''}">
+      <td><input type="checkbox" class="piririChk" data-i="${i}" ${dup?"disabled":"checked"}></td>
+      <td>${esc(it.name)}${dup?' <span class="hint">（登録済）</span>':''}</td>
+      <td>${addrShow}</td>
+      <td class="hint">${esc(it.note)}</td>
+    </tr>`;
+  }).join("");
+  updatePiririCount();
+  tbody.querySelectorAll(".piririChk").forEach(c=>c.addEventListener("change", updatePiririCount));
+}
+function updatePiririCount(){
+  const n = document.querySelectorAll(".piririChk:checked").length;
+  document.getElementById("piririCount").textContent = `${n}件選択中`;
+}
+function piririSelectAll(v){
+  document.querySelectorAll(".piririChk:not(:disabled)").forEach(c=>c.checked=v);
+  updatePiririCount();
+}
+async function runPiririImport(){
+  const checked = [...document.querySelectorAll(".piririChk:checked")].map(c=>PIRIRI_IMPORT_DATA[+c.dataset.i]);
+  if(!checked.length){ showMsg("登録する項目を選択してください"); return; }
+  if(!confirm(`${checked.length}件を取引先マスタへ登録します。よろしいですか？`)) return;
+  let okCount = 0;
+  for(const it of checked){
+    const data = {
+      name: it.name, kana:"", type:["customer","vendor"],
+      memberClass:"非会員", address: it.address||"", contact:"",
+      invoiceNo:"", bankInfo:"", note: it.note,
+      isActive:true, createdAt:nowIso(), createdBy:uid(), updatedAt:nowIso(), updatedBy:uid()
+    };
+    data.partyId = await nextPartyId();
+    await db.collection("parties").add(data);
+    okCount++;
+  }
+  showMsg(`${okCount}件を取引先マスタへ登録しました`);
+  renderPiririImportList();
+}
+
+/* ===== 経費：登録・編集 ===== */
+function calcEntryTax(){
+  const mode = (document.querySelector('input[name="eAmountMode"]:checked')||{}).value || "ex";
+  const r = Number(document.getElementById("eTaxRate").value);
+  const exInput = document.getElementById("eAmountEx");
+  const inInput = document.getElementById("eAmountIn");
+  const hint = document.getElementById("eTaxHint");
+  let ex, tax, amtIn;
+  if(mode === "in"){
+    amtIn = Number(inInput.value) || 0;
+    tax = taxIncludedOf(amtIn, r);
+    ex = amtIn ? amtIn - tax : 0;
+    exInput.value = amtIn ? ex : "";
+  } else {
+    ex = Number(exInput.value) || 0;
+    tax = taxOf(ex, r);
+    amtIn = ex ? ex + tax : 0;
+    inInput.value = ex ? amtIn : "";
+  }
+  hint.textContent = (ex || amtIn) ? `税抜 ¥${ex.toLocaleString()}／消費税 ¥${tax.toLocaleString()}／税込 ¥${amtIn.toLocaleString()}` : "";
+}
+function toggleAmountMode(){
+  const mode = document.querySelector('input[name="eAmountMode"]:checked').value;
+  const exInput = document.getElementById("eAmountEx");
+  const inInput = document.getElementById("eAmountIn");
+  const exLabel = document.getElementById("eAmountExLabel");
+  const inLabel = document.getElementById("eAmountInLabel");
+  if(mode === "in"){
+    exInput.readOnly = true; exInput.style.background = "var(--sand)";
+    inInput.readOnly = false; inInput.style.background = "";
+    exLabel.classList.remove("req"); exLabel.textContent = "金額（税抜・自動計算）";
+    inLabel.classList.add("req"); inLabel.textContent = "金額（税込）";
+  } else {
+    inInput.readOnly = true; inInput.style.background = "var(--sand)";
+    exInput.readOnly = false; exInput.style.background = "";
+    inLabel.classList.remove("req"); inLabel.textContent = "税込金額（自動計算）";
+    exLabel.classList.add("req"); exLabel.textContent = "金額（税抜）";
+  }
+  calcEntryTax();
+}
+function calcEditTax(){
+  const mode = (document.querySelector('input[name="emAmountMode"]:checked')||{}).value || "ex";
+  const r = Number(document.getElementById("emTaxRate").value);
+  const exInput = document.getElementById("emAmountEx");
+  const inInput = document.getElementById("emAmountIn");
+  const hint = document.getElementById("emTaxHint");
+  let ex, tax, amtIn;
+  if(mode === "in"){
+    amtIn = Number(inInput.value) || 0;
+    tax = taxIncludedOf(amtIn, r);
+    ex = amtIn ? amtIn - tax : 0;
+    exInput.value = amtIn ? ex : "";
+  } else {
+    ex = Number(exInput.value) || 0;
+    tax = taxOf(ex, r);
+    amtIn = ex ? ex + tax : 0;
+    inInput.value = ex ? amtIn : "";
+  }
+  hint.textContent = (ex || amtIn) ? `税抜 ¥${ex.toLocaleString()}／消費税 ¥${tax.toLocaleString()}／税込 ¥${amtIn.toLocaleString()}` : "";
+}
+function toggleEditAmountMode(){
+  const mode = document.querySelector('input[name="emAmountMode"]:checked').value;
+  const exInput = document.getElementById("emAmountEx");
+  const inInput = document.getElementById("emAmountIn");
+  const exLabel = document.getElementById("emAmountExLabel");
+  const inLabel = document.getElementById("emAmountInLabel");
+  if(mode === "in"){
+    exInput.readOnly = true; exInput.style.background = "var(--sand)";
+    inInput.readOnly = false; inInput.style.background = "";
+    exLabel.textContent = "金額（税抜・自動計算）";
+    inLabel.textContent = "金額（税込）";
+  } else {
+    inInput.readOnly = true; inInput.style.background = "var(--sand)";
+    exInput.readOnly = false; exInput.style.background = "";
+    inLabel.textContent = "税込金額（自動計算）";
+    exLabel.textContent = "金額（税抜）";
+  }
+  calcEditTax();
+}
+async function saveExpense(){
+  const date = document.getElementById("eDate").value;
+  const kamoku = document.getElementById("eKamoku").value;
+  const payType = document.getElementById("ePayType").value;
+  const partySel = document.getElementById("eParty").value;
+  const isFreeVendor = partySel === "__FREE__";
+  const partyId = isFreeVendor ? "" : partySel;
+  const vendorFree = document.getElementById("eVendorFree").value.trim();
+  const amountMode = (document.querySelector('input[name="eAmountMode"]:checked')||{}).value || "ex";
+  const taxRate = Number(document.getElementById("eTaxRate").value);
+  let amountEx, taxAmt, amountIn;
+  if(amountMode === "in"){
+    amountIn = Number(document.getElementById("eAmountIn").value) || 0;
+    taxAmt = taxIncludedOf(amountIn, taxRate);
+    amountEx = amountIn ? amountIn - taxAmt : 0;
+  } else {
+    amountEx = Number(document.getElementById("eAmountEx").value) || 0;
+    taxAmt = taxOf(amountEx, taxRate);
+    amountIn = amountEx ? amountEx + taxAmt : 0;
+  }
+  const amountEntered = amountMode === "in" ? amountIn : amountEx;
+  const desc = document.getElementById("eDesc").value.trim();
+  if(!date || !kamoku || !payType || !partySel || (isFreeVendor ? !vendorFree : !partyId) || !amountEntered || !desc){ showMsg("必須項目（*）を入力してください"); return; }
+  const fy = fiscalYearOf(date);
+  const receiptId = await nextNumber("E", fy);
+  const data = { receiptId, date, fiscalYear:fy, kamoku, payType, partyId,
+    vendor: isFreeVendor ? vendorFree : partyName(partyId), project: document.getElementById("eProject").value.trim(),
+    payMethod: document.getElementById("ePayMethod").value,
+    amountEx, taxRate, taxAmt, amountIn,
+    desc, note: document.getElementById("eNote").value.trim(),
+    invoice: document.getElementById("eInvoice").value, proof: document.getElementById("eProof").value,
+    imageUrl: document.getElementById("eImageUrl").value.trim(),
+    isTatekae: isTatekaeType(payType), settled:false,
+    createdAt: nowIso(), createdBy: uid(), updatedAt: nowIso(), updatedBy: uid() };
+  await db.collection("expenses").add(data);
+  showMsg(`保存しました（${receiptId}）— 領収書画像はこの番号で保存してください`);
+  ["eAmountEx","eAmountIn","eDesc","eNote","eImageUrl","eProject"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("eTaxHint").textContent="";
+}
+function openEditExpense(docId){
+  const e = EXPENSES.find(x=>x._id===docId); if(!e) return;
+  document.getElementById("emId").value = docId;
+  document.getElementById("emNo").textContent = e.receiptId;
+  document.getElementById("emDate").value = e.date||"";
+  document.getElementById("emKamoku").value = e.kamoku||"";
+  document.getElementById("emPayType").value = e.payType||"";
+  document.getElementById("emParty").value = e.partyId || "__FREE__";
+  document.getElementById("emVendorFree").value = e.partyId ? "" : (e.vendor||"");
+  toggleVendorFree("emParty","emVendorFree");
+  document.getElementById("emProject").value = e.project||"";
+  const emExRadio = document.querySelector('input[name="emAmountMode"][value="ex"]');
+  if(emExRadio) emExRadio.checked = true;
+  toggleEditAmountMode();
+  document.getElementById("emAmountEx").value = e.amountEx||"";
+  document.getElementById("emTaxRate").value = taxRateOptionValue(e.taxRate ?? 0.10);
+  document.getElementById("emDesc").value = e.desc||"";
+  document.getElementById("emInvoice").value = e.invoice||"あり";
+  document.getElementById("emProof").value = e.proof||"領収書";
+  document.getElementById("emImageUrl").value = e.imageUrl||"";
+  document.getElementById("emNote").value = e.note||"";
+  document.getElementById("emSettledInfo").textContent = e.settled ? `精算済（${e.settledDate}・${e.settledMethod||""}）— 取消は立替金精算タブから行ってください` : "";
+  calcEditTax();
+  openModal("editModal");
+}
+function updateExpense(){
+  const docId = document.getElementById("emId").value;
+  const taxRate = Number(document.getElementById("emTaxRate").value);
+  const amountMode = (document.querySelector('input[name="emAmountMode"]:checked')||{}).value || "ex";
+  let amountEx, taxAmt, amountIn;
+  if(amountMode === "in"){
+    amountIn = Number(document.getElementById("emAmountIn").value) || 0;
+    taxAmt = taxIncludedOf(amountIn, taxRate);
+    amountEx = amountIn ? amountIn - taxAmt : 0;
+  } else {
+    amountEx = Number(document.getElementById("emAmountEx").value) || 0;
+    taxAmt = taxOf(amountEx, taxRate);
+    amountIn = amountEx ? amountEx + taxAmt : 0;
+  }
+  const date = document.getElementById("emDate").value;
+  const payType = document.getElementById("emPayType").value;
+  const partySel = document.getElementById("emParty").value;
+  const isFreeVendor = partySel === "__FREE__";
+  const partyId = isFreeVendor ? "" : partySel;
+  const vendorFree = document.getElementById("emVendorFree").value.trim();
+  db.collection("expenses").doc(docId).set({
+    date, fiscalYear:fiscalYearOf(date),
+    kamoku: document.getElementById("emKamoku").value, payType, partyId,
+    vendor: isFreeVendor ? vendorFree : partyName(partyId), project: document.getElementById("emProject").value.trim(),
+    amountEx, taxRate, taxAmt, amountIn,
+    desc: document.getElementById("emDesc").value.trim(),
+    invoice: document.getElementById("emInvoice").value, proof: document.getElementById("emProof").value,
+    imageUrl: document.getElementById("emImageUrl").value.trim(), note: document.getElementById("emNote").value.trim(),
+    isTatekae: isTatekaeType(payType), updatedAt: nowIso(), updatedBy: uid()
+  }, {merge:true}).then(()=>{ closeModal("editModal"); showMsg("更新しました"); });
+}
+function deleteExpense(docId){
+  const e = EXPENSES.find(x=>x._id===docId); if(!e) return;
+  if(!confirm(`${e.receiptId}「${e.desc}」を削除しますか？この操作は取り消せません。`)) return;
+  db.collection("expenses").doc(docId).delete().then(()=>showMsg("削除しました"));
+}
+
+/* ===== 経費一覧 ===== */
+function fyExpenses(){ return EXPENSES.filter(e=> (e.fiscalYear ?? fiscalYearOf(e.date)) === CURRENT_FY ); }
+function fySales(){ return SALES.filter(s=> (s.fiscalYear ?? fiscalYearOf(s.issueDate)) === CURRENT_FY ); }
+function fyReceipts(){ return RECEIPTS.filter(r=> (r.fiscalYear ?? fiscalYearOf(r.issueDate)) === CURRENT_FY ); }
+
+function renderExpenseList(){
+  const rows = filteredExpenses();
+  document.getElementById("expTbody").innerHTML = rows.map(e=>`<tr>
+    <td class="mono">${esc(e.receiptId)}${e.imageUrl?` <a href="${esc(e.imageUrl)}" target="_blank" rel="noopener" title="領収書画像">📎</a>`:""}</td>
+    <td>${esc(e.date)}</td><td>${esc(e.kamoku)}</td>
+    <td>${esc(e.partyId||"")} ${esc(e.vendor||"")}</td><td>${esc(e.desc)}</td><td>${esc(e.project||"")}</td>
+    <td class="num">${yen(e.amountIn)}</td><td>${esc(PAY_LABELS[e.payType]||e.payType)}</td>
+    <td>${e.isTatekae ? (e.settled?'<span class="badge bd-settled">精算済</span>':'<span class="badge bd-unsettled">未精算</span>') : "—"}</td>
+    <td><button class="btn btn-s btn-sm" onclick="openEditExpense('${e._id}')">編集</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteExpense('${e._id}')">削除</button></td>
+  </tr>`).join("") || `<tr><td colspan="10" class="hint">該当するデータがありません。「＋ 支出入力」タブから登録できます。</td></tr>`;
+}
+function filteredExpenses(){
+  const q = document.getElementById("fText").value.trim().toLowerCase();
+  const fk = document.getElementById("fKamoku").value;
+  const fp = document.getElementById("fPayType").value;
+  const fs = document.getElementById("fSettled").value;
+  let rows = fyExpenses().slice().sort((a,b)=> (b.receiptId||"").localeCompare(a.receiptId||""));
+  return rows.filter(e=>{
+    if(q && !((e.desc||"")+(e.vendor||"")+(e.receiptId||"")).toLowerCase().includes(q)) return false;
+    if(fk && e.kamoku!==fk) return false;
+    if(fp==="tatekae" && !e.isTatekae) return false;
+    if(fp==="corp" && e.isTatekae) return false;
+    if(fs==="no" && (e.settled || !e.isTatekae)) return false;
+    if(fs==="yes" && !e.settled) return false;
+    return true;
+  });
+}
+
+/* ===== Excel出力 共通印刷設定 =====
+   A4縦・上下左右20mm・ヘッダーに出力日時・フッターにページ番号・
+   改ページ時に見出し行(1行目)を各ページへ繰り返し表示。
+   ※セルの背景色・罫線・フォントサイズの指定は、このアプリが使用する
+   　無料版Excel生成ライブラリの制約上ファイルへ埋め込めません。
+   　代わりにAutoFilter（絞り込み矢印）を付与するので、Excelで開いた後
+   　範囲選択→Ctrl+T（テーブルとして書式設定）でワンクリックで縞模様・
+   　書式が適用できます。 */
+function outputDateTimeStr(){
+  const d=new Date();
+  return d.getFullYear()+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+String(d.getDate()).padStart(2,"0")+" "
+    +String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+}
+function applyPrintSetup(ws, colCount){
+  const MM20 = 20/25.4; // 20mm→インチ
+  ws['!margins'] = { left:MM20, right:MM20, top:MM20, bottom:MM20, header:0.3, footer:0.3 };
+  ws['!pageSetup'] = { orientation:'portrait', paperSize:9, fitToWidth:1, fitToHeight:0 }; // paperSize 9 = A4
+  ws['!headerFooter'] = {
+    oddHeader: `&L一般社団法人 Team P&R出力日時：${outputDateTimeStr()}`,
+    oddFooter: `&Cページ &P / &N`
+  };
+  const lastCol = XLSX.utils.encode_col((colCount||1)-1);
+  const range = ws['!ref'] || `A1:${lastCol}1`;
+  ws['!autofilter'] = { ref: range };
+}
+function addPrintTitles(wb, sheetIdx, sheetName){
+  wb.Workbook = wb.Workbook || {};
+  wb.Workbook.Names = wb.Workbook.Names || [];
+  wb.Workbook.Names.push({ Name:'_xlnm.Print_Titles', Sheet:sheetIdx, Ref:`'${sheetName}'!$1:$1` });
+}
+/* rows(オブジェクト配列)からシートを作り、印刷設定・見出し行繰り返しを適用してbookへ追加 */
+function addSheet(wb, rows, sheetName){
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const colCount = rows && rows.length ? Object.keys(rows[0]).length : 1;
+  applyPrintSetup(ws, colCount);
+  const idx = wb.SheetNames.length;
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  addPrintTitles(wb, idx, sheetName);
+  return ws;
+}
+
+function exportExpenseListExcel(){
+  const rate=r=> r===0.08?"8%":r===0?"対象外":"10%";
+  const rows = filteredExpenses().map(e=>({
+    "証憑番号":e.receiptId,"支払日":e.date,"勘定科目":e.kamoku,"取引先ID":e.partyId||"","支払先":e.vendor||"",
+    "品目・摘要":e.desc,"事業名":e.project||"","支払区分":PAY_LABELS[e.payType]||e.payType,"支払方法":e.payMethod||"",
+    "税率":rate(e.taxRate),"税抜金額":e.amountEx,"消費税額":e.taxAmt,"税込金額":e.amountIn,
+    "インボイス":e.invoice||"","証憑種類":e.proof||"","精算状況":e.isTatekae?(e.settled?"精算済":"未精算"):"—",
+    "精算日":e.settledDate||"","精算方法":e.settledMethod||"","備考":e.note||""}));
+  const wb=XLSX.utils.book_new();
+  addSheet(wb, rows, "経費一覧");
+  XLSX.writeFile(wb, `TeamP_経費一覧_${CURRENT_FY}年度_${todayStr()}.xlsx`);
+  showMsg("経費一覧をExcel出力しました");
+}
+
+/* ===== 立替金精算 ===== */
+function renderTatekae(){
+  const persons = PAY_TYPES.filter(isTatekaeType);
+  const exps = fyExpenses();
+  document.getElementById("tatekaeCards").innerHTML = persons.map(p=>{
+    const un = exps.filter(e=>e.payType===p && e.isTatekae && !e.settled);
+    const st = exps.filter(e=>e.payType===p && e.isTatekae && e.settled);
+    const unSum = un.reduce((a,e)=>a+(e.amountIn||0),0);
+    const stSum = st.reduce((a,e)=>a+(e.amountIn||0),0);
+    return `<div class="sumcard ${unSum? "alert":"ok"}"><div class="t">${PAY_LABELS[p]}</div><div class="v">${yen(unSum)}</div><div class="s">未精算 ${un.length}件 ／ 精算済累計 ${yen(stSum)}</div></div>`;
+  }).join("");
+  const fp = document.getElementById("fTatekaePerson").value;
+  const un = exps.filter(e=>e.isTatekae && !e.settled && (!fp || e.payType===fp)).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+  document.getElementById("tatekaeTbody").innerHTML = un.map(e=>`<tr>
+    <td><input type="checkbox" class="tchk" value="${e._id}" style="width:auto"></td>
+    <td class="mono">${esc(e.receiptId)}</td><td>${esc(e.date)}</td><td>${esc(PAY_LABELS[e.payType])}</td>
+    <td>${esc(e.vendor||"")}</td><td>${esc(e.desc)}</td><td class="num">${yen(e.amountIn)}</td>
+    <td><button class="btn btn-green btn-sm" onclick="openSettle('${e._id}')">精算する</button></td>
+  </tr>`).join("") || `<tr><td colspan="8" class="hint">未精算の立替金はありません。</td></tr>`;
+  const st = exps.filter(e=>e.isTatekae && e.settled).sort((a,b)=>(b.settledDate||"").localeCompare(a.settledDate||""));
+  document.getElementById("settledTbody").innerHTML = st.map(e=>`<tr>
+    <td class="mono">${esc(e.receiptId)}</td><td>${esc(PAY_LABELS[e.payType])}</td><td>${esc(e.desc)}</td>
+    <td class="num">${yen(e.amountIn)}</td><td>${esc(e.settledDate||"")}</td><td>${esc(e.settledMethod||"")}</td><td>${esc(e.settledNote||"")}</td>
+    <td><button class="btn btn-danger btn-sm" onclick="cancelSettle('${e._id}')">精算取消</button></td>
+  </tr>`).join("") || `<tr><td colspan="8" class="hint">精算済みの履歴はありません。</td></tr>`;
+}
+function toggleAllTatekae(cb){ document.querySelectorAll(".tchk").forEach(c=>c.checked=cb.checked); }
+function openSettle(docId){
+  const e = EXPENSES.find(x=>x._id===docId); if(!e) return;
+  document.getElementById("smId").value=docId;
+  document.getElementById("smInfo").innerHTML = `<span class="mono">${esc(e.receiptId)}</span>　${esc(PAY_LABELS[e.payType])}　${esc(e.desc)}　<b>${yen(e.amountIn)}</b>`;
+  document.getElementById("smDate").value = todayStr();
+  openModal("settleModal");
+}
+function doSettle(){
+  const docId=document.getElementById("smId").value;
+  const d=document.getElementById("smDate").value;
+  if(!d){ showMsg("精算日を入力してください"); return; }
+  db.collection("expenses").doc(docId).set({settled:true, settledDate:d,
+    settledMethod:document.getElementById("smMethod").value, settledNote:document.getElementById("smNote").value.trim(),
+    settledAt:nowIso(), updatedAt:nowIso(), updatedBy:uid()},{merge:true})
+  .then(()=>{ closeModal("settleModal"); showMsg("精算済みにしました"); });
+}
+function openBulkSettle(){
+  const ids=[...document.querySelectorAll(".tchk:checked")].map(c=>c.value);
+  if(!ids.length){ showMsg("精算する項目にチェックを入れてください"); return; }
+  const list = ids.map(id=>EXPENSES.find(e=>e._id===id)).filter(Boolean);
+  const sum = list.reduce((a,e)=>a+(e.amountIn||0),0);
+  document.getElementById("bsList").innerHTML = list.map(e=>`<div>${esc(e.receiptId)}　${esc(PAY_LABELS[e.payType])}　${esc(e.desc)}　${yen(e.amountIn)}</div>`).join("") + `<div style="font-weight:700;border-top:1px solid var(--line);margin-top:6px;padding-top:6px">合計 ${list.length}件　${yen(sum)}</div>`;
+  document.getElementById("bsDate").value = todayStr();
+  document.getElementById("bulkSettleModal").dataset.ids = JSON.stringify(ids);
+  openModal("bulkSettleModal");
+}
+async function doBulkSettle(){
+  const ids = JSON.parse(document.getElementById("bulkSettleModal").dataset.ids||"[]");
+  const d = document.getElementById("bsDate").value;
+  if(!d){ showMsg("精算日を入力してください"); return; }
+  const batch = db.batch();
+  const payload = {settled:true, settledDate:d, settledMethod:document.getElementById("bsMethod").value,
+    settledNote:document.getElementById("bsNote").value.trim(), settledAt:nowIso(), updatedAt:nowIso(), updatedBy:uid()};
+  ids.forEach(id=>batch.set(db.collection("expenses").doc(id), payload, {merge:true}));
+  await batch.commit();
+  closeModal("bulkSettleModal"); showMsg(`${ids.length}件を精算済みにしました`);
+}
+function cancelSettle(docId){
+  const e=EXPENSES.find(x=>x._id===docId); if(!e) return;
+  if(!confirm(`${e.receiptId}「${e.desc}」の精算を取り消して未精算に戻しますか？`)) return;
+  db.collection("expenses").doc(docId).set({settled:false, settledDate:firebase.firestore.FieldValue.delete(),
+    settledMethod:firebase.firestore.FieldValue.delete(), settledNote:firebase.firestore.FieldValue.delete(),
+    settledAt:firebase.firestore.FieldValue.delete(), updatedAt:nowIso(), updatedBy:uid()},{merge:true})
+  .then(()=>showMsg("精算を取り消しました"));
+}
+function exportTatekaeExcel(){
+  const exps = fyExpenses().filter(e=>e.isTatekae);
+  const un = exps.filter(e=>!e.settled).sort((a,b)=>(a.date||"").localeCompare(b.date||""))
+    .map(e=>({"証憑番号":e.receiptId,"支払日":e.date,"立替者":PAY_LABELS[e.payType]||e.payType,"支払先":e.vendor||"","品目":e.desc,"税込金額":e.amountIn}));
+  const st = exps.filter(e=>e.settled).sort((a,b)=>(b.settledDate||"").localeCompare(a.settledDate||""))
+    .map(e=>({"証憑番号":e.receiptId,"立替者":PAY_LABELS[e.payType]||e.payType,"品目":e.desc,"税込金額":e.amountIn,
+      "精算日":e.settledDate||"","精算方法":e.settledMethod||"","備考":e.settledNote||""}));
+  const wb=XLSX.utils.book_new();
+  addSheet(wb, un, "未精算");
+  addSheet(wb, st, "精算済み履歴");
+  XLSX.writeFile(wb, `TeamP_立替金精算_${CURRENT_FY}年度_${todayStr()}.xlsx`);
+  showMsg("立替金データをExcel出力しました");
+}
+
+/* ===== 売上・請求書 ===== */
+function addItemRow(item){
+  const div=document.createElement("div"); div.className="irow";
+  const n=document.querySelectorAll("#itemRows .irow").length+1;
+  div.innerHTML = `<span class="hint">${n}</span>
+    <input class="i-desc" placeholder="内容" value="${esc(item?.desc||"")}">
+    <input class="i-qty" type="number" placeholder="数量" value="${item?.qty??""}" oninput="calcInvoice()">
+    <input class="i-unit" placeholder="単位" value="${esc(item?.unit||"式")}">
+    <input class="i-price" type="number" placeholder="単価" value="${item?.unitPrice??""}" oninput="calcInvoice()">
+    <span class="amt">0</span>
+    <select class="i-rate" onchange="calcInvoice()"><option value="0.10">10%</option><option value="0.08">8%</option><option value="0">対象外</option></select>
+    <button class="del" title="行を削除" onclick="this.parentElement.remove();renumberItems();calcInvoice()">×</button>`;
+  if(item?.taxRate!=null) div.querySelector(".i-rate").value = taxRateOptionValue(item.taxRate);
+  document.getElementById("itemRows").appendChild(div);
+  calcInvoice();
+}
+function renumberItems(){ document.querySelectorAll("#itemRows .irow").forEach((r,i)=>r.querySelector("span.hint").textContent=i+1); }
+function readItems(){
+  return [...document.querySelectorAll("#itemRows .irow")].map(r=>{
+    const qty=Number(r.querySelector(".i-qty").value)||0;
+    const unitPrice=Number(r.querySelector(".i-price").value)||0;
+    return { desc:r.querySelector(".i-desc").value.trim(), qty, unit:r.querySelector(".i-unit").value.trim(),
+      unitPrice, amount:qty*unitPrice, taxRate:Number(r.querySelector(".i-rate").value) };
+  }).filter(i=>i.desc||i.amount);
+}
+function invoiceTotals(items){
+  const base10 = items.filter(i=>i.taxRate===0.10).reduce((a,i)=>a+i.amount,0);
+  const base8  = items.filter(i=>i.taxRate===0.08).reduce((a,i)=>a+i.amount,0);
+  const base0  = items.filter(i=>i.taxRate===0).reduce((a,i)=>a+i.amount,0);
+  const tax10 = taxOf(base10, 0.10), tax8 = taxOf(base8, 0.08);
+  const subtotal = base10+base8+base0;
+  return {base10, base8, subtotal, tax10, tax8, total: subtotal+tax10+tax8};
+}
+function calcInvoice(){
+  const items = readItems();
+  document.querySelectorAll("#itemRows .irow").forEach(r=>{
+    const qty=Number(r.querySelector(".i-qty").value)||0, up=Number(r.querySelector(".i-price").value)||0;
+    r.querySelector(".amt").textContent = (qty*up).toLocaleString();
+  });
+  const t = invoiceTotals(items);
+  document.getElementById("cSubtotal").textContent = t.subtotal.toLocaleString();
+  document.getElementById("cTax10").textContent = t.tax10.toLocaleString();
+  document.getElementById("cTax8").textContent = t.tax8.toLocaleString();
+  document.getElementById("cTotal").textContent = t.total.toLocaleString();
+}
+async function saveInvoice(status){
+  const partyId=document.getElementById("sParty").value;
+  const issueDate=document.getElementById("sIssueDate").value;
+  const title=document.getElementById("sTitle").value.trim();
+  const items=readItems();
+  if(!partyId||!issueDate||!title){ showMsg("必須項目（*）を入力してください"); return; }
+  if(!items.length){ showMsg("明細を1行以上入力してください"); return; }
+  const t = invoiceTotals(items);
+  const fy = fiscalYearOf(issueDate);
+  const editing = document.getElementById("sEditingId").value;
+  const data = { partyId, partyNameSnap: partyName(partyId), title,
+    kamoku: document.getElementById("sKamoku").value, project: document.getElementById("sProject").value.trim(),
+    issueDate, dueDate: document.getElementById("sDueDate").value, fiscalYear: fy,
+    items, subtotal:t.subtotal, tax10:t.tax10, tax8:t.tax8, base10:t.base10, base8:t.base8, total:t.total,
+    status, updatedAt: nowIso(), updatedBy: uid() };
+  if(editing){
+    const old = SALES.find(s=>s._id===editing);
+    if(old && old.status==="paid"){ showMsg("入金済の請求書は編集できません"); return; }
+    data.invoiceId = old.invoiceId;
+    await db.collection("sales").doc(editing).set(data, {merge:true});
+    showMsg(`請求書を更新しました（${old.invoiceId}）`);
+  }else{
+    data.invoiceId = await nextNumber("I", fy);
+    data.createdAt = nowIso(); data.createdBy = uid();
+    await db.collection("sales").add(data);
+    showMsg(status==="issued" ? `発行しました（${data.invoiceId}）— 帳票発行タブから印刷できます` : `下書き保存しました（${data.invoiceId}）`);
+  }
+  resetInvoiceForm();
+}
+function resetInvoiceForm(){
+  ["sEditingId","sTitle","sProject","sDueDate"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("sParty").value="";
+  document.getElementById("sIssueDate").value=todayStr();
+  document.getElementById("itemRows").innerHTML="";
+  addItemRow();
+  document.getElementById("salesFormTitle").textContent="請求書の作成";
+  refreshPreviews();
+}
+function editInvoice(docId){
+  const s = SALES.find(x=>x._id===docId); if(!s) return;
+  if(s.status==="paid"){ showMsg("入金済の請求書は編集できません（消込を取り消してから編集してください）"); return; }
+  document.getElementById("sEditingId").value=docId;
+  document.getElementById("sParty").value=s.partyId||"";
+  document.getElementById("sIssueDate").value=s.issueDate||"";
+  document.getElementById("sDueDate").value=s.dueDate||"";
+  document.getElementById("sTitle").value=s.title||"";
+  document.getElementById("sKamoku").value=s.kamoku||KAMOKU_REV[0];
+  document.getElementById("sProject").value=s.project||"";
+  document.getElementById("itemRows").innerHTML="";
+  (s.items||[]).forEach(i=>addItemRow(i));
+  document.getElementById("salesFormTitle").textContent=`請求書の編集（${s.invoiceId}）`;
+  switchTab("page-sales"); window.scrollTo({top:0,behavior:"smooth"});
+}
+function renderSalesList(){
+  const st=document.getElementById("fSalesStatus").value;
+  const q=document.getElementById("fSalesText").value.trim().toLowerCase();
+  let rows = fySales().slice().sort((a,b)=>(b.invoiceId||"").localeCompare(a.invoiceId||""));
+  rows = rows.filter(s=>{
+    if(st && s.status!==st) return false;
+    if(q && !((s.title||"")+(s.partyNameSnap||"")+(s.invoiceId||"")).toLowerCase().includes(q)) return false;
+    return true;
+  });
+  document.getElementById("salesTbody").innerHTML = rows.map(s=>{
+    const acts=[];
+    if(s.status==="draft") acts.push(`<button class="btn btn-green btn-sm" onclick="issueInvoice('${s._id}')">発行</button>`);
+    if(s.status!=="cancel") acts.push(`<button class="btn btn-s btn-sm" onclick="printInvoiceDoc('${s._id}')">印刷</button>`);
+    if(s.status==="issued") acts.push(`<button class="btn btn-green btn-sm" onclick="openPayModal('${s._id}')">入金消込</button>`);
+    if(s.status==="paid" && !s.receiptId) acts.push(`<button class="btn btn-p btn-sm" onclick="issueReceiptFromInvoice('${s._id}')">領収書発行</button>`);
+    if(s.status==="paid") acts.push(`<button class="btn btn-s btn-sm" onclick="unmarkPaid('${s._id}')">消込取消</button>`);
+    if(s.status!=="paid") acts.push(`<button class="btn btn-s btn-sm" onclick="editInvoice('${s._id}')">編集</button>`);
+    if(s.status==="draft") acts.push(`<button class="btn btn-danger btn-sm" onclick="deleteInvoice('${s._id}')">削除</button>`);
+    if(s.status==="issued") acts.push(`<button class="btn btn-danger btn-sm" onclick="cancelInvoice('${s._id}')">取消</button>`);
+    return `<tr><td class="mono">${esc(s.invoiceId)}</td><td>${esc(s.issueDate)}</td>
+      <td>${esc(s.partyId||"")} ${esc(partyName(s.partyId, s.partyNameSnap))}</td><td>${esc(s.title)}</td>
+      <td class="num">${yen(s.total)}</td><td><span class="badge ${STATUS_BADGE[s.status]}">${STATUS_LABEL[s.status]}</span></td>
+      <td>${esc(s.paidDate||"")}</td><td style="white-space:nowrap">${acts.join(" ")}</td></tr>`;
+  }).join("") || `<tr><td colspan="8" class="hint">この事業年度の請求書はありません。上のフォームから作成できます。</td></tr>`;
+}
+function issueInvoice(docId){
+  db.collection("sales").doc(docId).set({status:"issued", updatedAt:nowIso(), updatedBy:uid()},{merge:true}).then(()=>showMsg("発行済みにしました"));
+}
+function cancelInvoice(docId){
+  const s=SALES.find(x=>x._id===docId);
+  if(!confirm(`${s.invoiceId}「${s.title}」を取消にしますか？（記録は残ります）`)) return;
+  db.collection("sales").doc(docId).set({status:"cancel", updatedAt:nowIso(), updatedBy:uid()},{merge:true}).then(()=>showMsg("取消にしました"));
+}
+function deleteInvoice(docId){
+  const s=SALES.find(x=>x._id===docId);
+  if(!confirm(`下書き ${s.invoiceId}「${s.title}」を削除しますか？`)) return;
+  db.collection("sales").doc(docId).delete().then(()=>showMsg("削除しました"));
+}
+function openPayModal(docId){
+  const s=SALES.find(x=>x._id===docId); if(!s) return;
+  document.getElementById("pmId").value=docId;
+  document.getElementById("pmNo").textContent=s.invoiceId;
+  document.getElementById("pmDate").value=todayStr();
+  document.getElementById("pmAmount").value=s.total;
+  openModal("payModal");
+}
+function doMarkPaid(){
+  const docId=document.getElementById("pmId").value;
+  const d=document.getElementById("pmDate").value;
+  if(!d){ showMsg("入金日を入力してください"); return; }
+  db.collection("sales").doc(docId).set({status:"paid", paidDate:d, paidAmount:Number(document.getElementById("pmAmount").value)||0,
+    updatedAt:nowIso(), updatedBy:uid()},{merge:true}).then(()=>{ closeModal("payModal"); showMsg("入金済みにしました"); });
+}
+function unmarkPaid(docId){
+  const s=SALES.find(x=>x._id===docId);
+  if(s.receiptId){ showMsg("領収書発行済みのため消込を取り消せません"); return; }
+  if(!confirm(`${s.invoiceId} の入金消込を取り消しますか？`)) return;
+  db.collection("sales").doc(docId).set({status:"issued", paidDate:firebase.firestore.FieldValue.delete(),
+    paidAmount:firebase.firestore.FieldValue.delete(), updatedAt:nowIso(), updatedBy:uid()},{merge:true}).then(()=>showMsg("消込を取り消しました"));
+}
+
+/* ===== 領収書発行 ===== */
+function calcReceiptTax(){
+  const amt=Number(document.getElementById("rAmount").value)||0;
+  const r=Number(document.getElementById("rTaxRate").value);
+  const tax = taxIncludedOf(amt, r);
+  document.getElementById("rBreakdown").value = amt ? `税抜 ${(amt-tax).toLocaleString()} ／ 消費税 ${tax.toLocaleString()}` : "";
+}
+function calcBulkReceiptTax(){
+  const amt=Number(document.getElementById("rbAmount").value)||0;
+  const r=Number(document.getElementById("rbTaxRate").value);
+  const tax = taxIncludedOf(amt, r);
+  document.getElementById("rbBreakdown").value = amt ? `税抜 ${(amt-tax).toLocaleString()} ／ 消費税 ${tax.toLocaleString()}（1名あたり）` : "";
+}
+async function issueBulkReceipts(){
+  const partyIds = [...document.querySelectorAll(".rbParty:checked")].map(el=>el.value);
+  const issueDate=document.getElementById("rbDate").value;
+  const amount=Number(document.getElementById("rbAmount").value);
+  const proviso=document.getElementById("rbProviso").value.trim();
+  if(!partyIds.length){ showMsg("宛先を1件以上選択してください"); return; }
+  if(!issueDate||!amount||!proviso){ showMsg("必須項目（*）を入力してください"); return; }
+  if(!confirm(`${partyIds.length}件の領収書を同じ内容（${yen(amount)}／${proviso}）でまとめて発行します。よろしいですか？`)) return;
+  const taxRate=Number(document.getElementById("rbTaxRate").value);
+  const taxAmt = taxIncludedOf(amount, taxRate);
+  const fy=fiscalYearOf(issueDate);
+  const payMethod=document.getElementById("rbPayMethod").value;
+  const kamoku=document.getElementById("rbKamoku").value;
+  const created=[];
+  for(const partyId of partyIds){
+    const receiptId = await nextNumber("R", fy);
+    const data={ receiptId, partyId, partyNameSnap: partyName(partyId), invoiceId:"",
+      amount, taxRate, amountEx: amount-taxAmt, taxAmt, proviso,
+      payMethod, kamoku, issueDate, fiscalYear:fy, status:"issued", createdAt:nowIso(), createdBy:uid() };
+    await db.collection("issuedReceipts").add(data);
+    created.push(data);
+  }
+  showMsg(`領収書を${created.length}件まとめて発行しました`);
+  document.querySelectorAll(".rbParty:checked").forEach(el=>el.checked=false);
+  updateBulkPartyCount();
+  ["rbAmount","rbProviso"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("rbBreakdown").value="";
+  setTimeout(()=>doPrintReceiptsBulk(created), 300);
+}
+function receiptDocHTML(r, isLast){
+  const reg=regNoFor(r.issueDate);
+  const m=SETTINGS||{};
+  return `<div class="doc" style="${isLast?"":"page-break-after:always"}">
+    <div class="doctitle">領収書</div>
+    <div class="meta">
+      <div>
+        <div>領収書番号：${esc(r.receiptId)}</div>
+        <div style="margin-top:6mm" class="to">${esc(partyName(r.partyId, r.partyNameSnap))}　様</div>
+      </div>
+      <div class="issuer"><div>発行日：${esc(r.issueDate||"")}</div></div>
+    </div>
+    <div class="amount-box"><span>領収金額</span><span class="yen">${yen(r.amount)}−</span></div>
+    <div class="proviso">但し、${esc(r.proviso||"")}　として</div>
+    <div>上記正に領収いたしました。</div>
+    <div class="meta" style="margin-top:8mm">
+      <div style="font-size:9.5pt">
+        <div>支払方法：${esc(r.payMethod||"")}</div>
+        <div>税率：${r.taxRate===0.08?"8%":r.taxRate===0?"対象外":"10%"}　／　税抜金額：${yen(r.amountEx)}　／　消費税額：${yen(r.taxAmt)}</div>
+        <div class="regno">${reg?"登録番号："+esc(reg):""}</div>
+      </div>
+      <div class="issuer">
+        <div class="corp">${esc(m.corpName||"")}</div>
+        <div>${esc(m.address||"")}</div>
+        <div>${esc(m.rep||"")}</div>
+      </div>
+    </div>
+  </div>`;
+}
+function doPrintReceiptsBulk(list){
+  document.getElementById("printInvoice").style.display = "none";
+  document.getElementById("printReceipt").style.display = "none";
+  const bulk = document.getElementById("printReceiptsBulk");
+  bulk.innerHTML = list.map((r,idx)=>receiptDocHTML(r, idx===list.length-1)).join("");
+  bulk.style.display = "block";
+  window.print();
+}
+async function issueStandaloneReceipt(){
+  const partyId=document.getElementById("rParty").value;
+  const issueDate=document.getElementById("rDate").value;
+  const amount=Number(document.getElementById("rAmount").value);
+  const proviso=document.getElementById("rProviso").value.trim();
+  if(!partyId||!issueDate||!amount||!proviso){ showMsg("必須項目（*）を入力してください"); return; }
+  const taxRate=Number(document.getElementById("rTaxRate").value);
+  const taxAmt = taxIncludedOf(amount, taxRate);
+  const fy=fiscalYearOf(issueDate);
+  const receiptId = await nextNumber("R", fy);
+  const data={ receiptId, partyId, partyNameSnap: partyName(partyId), invoiceId:"",
+    amount, taxRate, amountEx: amount-taxAmt, taxAmt, proviso,
+    payMethod: document.getElementById("rPayMethod").value, kamoku: document.getElementById("rKamoku").value,
+    issueDate, fiscalYear:fy, status:"issued", createdAt:nowIso(), createdBy:uid() };
+  if(REISSUE_OF){ data.replacesReceiptId = REISSUE_OF; }
+  const ref = await db.collection("issuedReceipts").add(data);
+  if(REISSUE_OF){
+    await db.collection("issuedReceipts").doc(REISSUE_OF).set({replacedByReceiptId: ref.id, updatedAt:nowIso(), updatedBy:uid()},{merge:true});
+  }
+  showMsg(`領収書を発行しました（${receiptId}）${REISSUE_OF?"（差し替え発行）":""}`);
+  cancelReissue();
+  ["rAmount","rProviso"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("rBreakdown").value="";
+  setTimeout(()=>printReceiptDocByData(data), 300);
+}
+function cancelReissue(){
+  REISSUE_OF = null;
+  document.getElementById("reissueBanner").style.display = "none";
+}
+async function issueReceiptFromInvoice(docId){
+  const s=SALES.find(x=>x._id===docId); if(!s) return;
+  const fy=fiscalYearOf(s.paidDate||todayStr());
+  const receiptId=await nextNumber("R", fy);
+  const taxAmt=(s.tax10||0)+(s.tax8||0);
+  const data={ receiptId, partyId:s.partyId, partyNameSnap: partyName(s.partyId, s.partyNameSnap), invoiceId:s.invoiceId,
+    amount:s.total, taxRate: s.base8&&!s.base10 ? 0.08 : 0.10, amountEx:s.subtotal, taxAmt,
+    proviso:`${s.title}の代金`, payMethod:"銀行振込", kamoku:s.kamoku||"",
+    issueDate:s.paidDate||todayStr(), fiscalYear:fy, status:"issued", createdAt:nowIso(), createdBy:uid() };
+  if(s.lastVoidedReceiptId){ data.replacesReceiptId = s.lastVoidedReceiptId; }
+  const ref = await db.collection("issuedReceipts").add(data);
+  if(s.lastVoidedReceiptId){
+    await db.collection("issuedReceipts").doc(s.lastVoidedReceiptId).set({replacedByReceiptId: ref.id, updatedAt:nowIso(), updatedBy:uid()},{merge:true});
+  }
+  await db.collection("sales").doc(docId).set({receiptId, lastVoidedReceiptId:firebase.firestore.FieldValue.delete(), updatedAt:nowIso(), updatedBy:uid()},{merge:true});
+  showMsg(`領収書を発行しました（${receiptId}）${s.lastVoidedReceiptId?"（差し替え発行）":""}`);
+  setTimeout(()=>printReceiptDocByData(data), 300);
+}
+/* ===== 領収書のボイド・差し替え ===== */
+function voidReceipt(docId){
+  const r=RECEIPTS.find(x=>x._id===docId); if(!r) return;
+  if(r.status==="void"){ showMsg("この領収書は既に取消済みです"); return; }
+  const reason = prompt(`${r.receiptId}「${r.proviso||""}」をボイド（取消）しますか？\n取消理由を入力してください（番号は欠番として履歴に残ります）`, "");
+  if(reason===null) return;
+  if(!reason.trim()){ showMsg("取消理由を入力してください"); return; }
+  const update = { status:"void", voidedAt:nowIso(), voidedBy:uid(), voidReason:reason.trim(), updatedAt:nowIso(), updatedBy:uid() };
+  db.collection("issuedReceipts").doc(docId).set(update, {merge:true}).then(async ()=>{
+    if(r.invoiceId){
+      const s = SALES.find(x=>x.receiptId===r.receiptId);
+      if(s) await db.collection("sales").doc(s._id).set({receiptId:firebase.firestore.FieldValue.delete(), lastVoidedReceiptId:docId, updatedAt:nowIso(), updatedBy:uid()},{merge:true});
+    }
+    showMsg("領収書をボイド（取消）しました");
+  });
+}
+function reissueReceipt(docId){
+  const r=RECEIPTS.find(x=>x._id===docId); if(!r) return;
+  if(r.invoiceId){
+    showMsg("この領収書は請求書に紐づいています。売上・請求タブの「領収書発行」ボタンから差し替え発行してください。");
+    return;
+  }
+  if(r.status!=="void"){
+    if(!confirm(`${r.receiptId} を先にボイド（取消）してから差し替え発行します。よろしいですか？`)) return;
+    const update = { status:"void", voidedAt:nowIso(), voidedBy:uid(), voidReason:"差し替え発行のため", updatedAt:nowIso(), updatedBy:uid() };
+    db.collection("issuedReceipts").doc(docId).set(update, {merge:true}).then(()=>startReissueForm(r));
+  } else {
+    startReissueForm(r);
+  }
+}
+function startReissueForm(r){
+  REISSUE_OF = r._id;
+  document.getElementById("reissueBanner").style.display = "block";
+  document.getElementById("reissueOfNo").textContent = r.receiptId;
+  document.getElementById("rParty").value = r.partyId||"";
+  document.getElementById("rDate").value = todayStr();
+  document.getElementById("rAmount").value = r.amount||"";
+  document.getElementById("rTaxRate").value = r.taxRate===0.08?"0.08":r.taxRate===0?"0":"0.10";
+  document.getElementById("rPayMethod").value = r.payMethod||"銀行振込";
+  document.getElementById("rProviso").value = r.proviso||"";
+  document.getElementById("rKamoku").value = r.kamoku||"";
+  calcReceiptTax();
+  document.getElementById("page-docs").scrollIntoView({behavior:"smooth"});
+}
+
+/* ===== 帳票一覧・印刷 ===== */
+function renderDocs(){
+  const fst = document.getElementById("fDocsStatus") ? document.getElementById("fDocsStatus").value : "";
+  const inv = fySales().filter(s=>s.status!=="draft").map(s=>({kind:"請求書", no:s.invoiceId, date:s.issueDate,
+    to: partyName(s.partyId, s.partyNameSnap), amount:s.total, memo:s.title,
+    stKey: s.status==="cancel"?"void":"issued", stLabel: s.status==="cancel"?"取消":"発行済",
+    act:`<button class="btn btn-s btn-sm" onclick="printInvoiceDoc('${s._id}')">印刷</button>`}));
+  const rcs = fyReceipts().map(r=>{
+    const isVoid = r.status==="void";
+    const acts=[];
+    if(!isVoid){
+      acts.push(`<button class="btn btn-s btn-sm" onclick="printReceiptDoc('${r._id}')">再印刷</button>`);
+      acts.push(`<button class="btn btn-danger btn-sm" onclick="voidReceipt('${r._id}')">ボイド</button>`);
+    }
+    if(!r.invoiceId && !r.replacedByReceiptId) acts.push(`<button class="btn btn-p btn-sm" onclick="reissueReceipt('${r._id}')">差し替え発行</button>`);
+    let memo = r.proviso||"";
+    if(r.replacesReceiptId){ const o=RECEIPTS.find(x=>x._id===r.replacesReceiptId); memo += o? `（${o.receiptId}の差し替え）`:""; }
+    if(r.replacedByReceiptId){ const n=RECEIPTS.find(x=>x._id===r.replacedByReceiptId); memo += n? `（→${n.receiptId}へ差し替え済）`:""; }
+    if(isVoid && r.voidReason) memo += `（理由：${r.voidReason}）`;
+    return {kind:"領収書", no:r.receiptId, date:r.issueDate,
+      to: partyName(r.partyId, r.partyNameSnap), amount:r.amount, memo,
+      stKey: isVoid?"void":"issued", stLabel: RECEIPT_STATUS_LABEL[r.status||"issued"],
+      act: acts.join(" ")};
+  });
+  let all=[...inv, ...rcs];
+  if(fst) all = all.filter(d=>d.stKey===fst);
+  all.sort((a,b)=>(b.no||"").localeCompare(a.no||""));
+  document.getElementById("docsTbody").innerHTML = all.map(d=>`<tr${d.stKey==="void"?' style="color:var(--shu);opacity:.7;text-decoration:line-through"':''}>
+    <td>${d.kind}</td><td class="mono">${esc(d.no)}</td><td>${esc(d.date)}</td><td>${esc(d.to)}</td>
+    <td class="num">${yen(d.amount)}</td><td>${esc(d.memo)}</td>
+    <td><span class="badge ${d.stKey==='void'?'bd-cancel':'bd-issued'}">${esc(d.stLabel)}</span></td>
+    <td style="white-space:nowrap">${d.act}</td></tr>`).join("")
+    || `<tr><td colspan="8" class="hint">この事業年度の発行済み帳票はありません。</td></tr>`;
+}
+function regNoFor(dateStr){
+  const m=SETTINGS||{};
+  if(!m.invoiceRegNo) return "";
+  if(m.invoiceRegDate && dateStr && dateStr < m.invoiceRegDate) return "";
+  return m.invoiceRegNo;
+}
+function fillIssuer(prefix){
+  const m=SETTINGS||{};
+  document.getElementById(prefix+"Corp").textContent=m.corpName||"";
+  document.getElementById(prefix+"Addr").textContent=m.address||"";
+  document.getElementById(prefix+"Rep").textContent=m.rep||"";
+}
+function doPrint(which){
+  document.getElementById("printInvoice").style.display = which==="invoice" ? "block":"none";
+  document.getElementById("printReceipt").style.display = which==="receipt" ? "block":"none";
+  document.getElementById("printReceiptsBulk").style.display = "none";
+  window.print();
+}
+function printInvoiceDoc(docId){
+  const s=SALES.find(x=>x._id===docId); if(!s) return;
+  const m=SETTINGS||{};
+  document.getElementById("piNo").textContent=s.invoiceId;
+  document.getElementById("piDate").textContent=s.issueDate||"";
+  document.getElementById("piDue").textContent=s.dueDate||"—";
+  const pty=partyById(s.partyId);
+  document.getElementById("piTo").textContent=(pty?pty.name:s.partyNameSnap)||"";
+  document.getElementById("piTitle").textContent=s.title||"";
+  fillIssuer("pi");
+  document.getElementById("piTel").textContent = m.tel ? "TEL："+m.tel : "";
+  const reg = regNoFor(s.issueDate);
+  document.getElementById("piRegNo").textContent = reg ? "登録番号："+reg : "";
+  document.getElementById("piRegNote").textContent = reg ? "" : "・当法人は適格請求書発行事業者の登録申請中です。";
+  document.getElementById("piItems").innerHTML=(s.items||[]).map((i,idx)=>`<tr>
+    <td style="text-align:center">${idx+1}</td><td>${esc(i.desc)}</td><td style="text-align:right">${i.qty||""}</td>
+    <td style="text-align:center">${esc(i.unit||"")}</td><td style="text-align:right">${i.unitPrice?i.unitPrice.toLocaleString():""}</td>
+    <td style="text-align:right">${i.amount?i.amount.toLocaleString():""}</td>
+    <td style="text-align:center">${i.taxRate===0.08?"8%":i.taxRate===0?"—":"10%"}</td></tr>`).join("");
+  document.getElementById("piSub").textContent=yen(s.subtotal);
+  document.getElementById("piBase10").textContent=yen(s.base10||0);
+  document.getElementById("piBase8").textContent=yen(s.base8||0);
+  document.getElementById("piT10").textContent=yen(s.tax10||0);
+  document.getElementById("piT8").textContent=yen(s.tax8||0);
+  document.getElementById("piGT").textContent=yen(s.total);
+  document.getElementById("piTotal").textContent=yen(s.total)+"（税込）";
+  document.getElementById("piBank").textContent = [m.bank, m.branch, (m.accType||"")+" "+(m.accNo||""), m.accName].filter(Boolean).join("　");
+  doPrint("invoice");
+}
+function printReceiptDoc(docId){
+  const r=RECEIPTS.find(x=>x._id===docId); if(!r) return;
+  if(r.status==="void"){ showMsg("この領収書はボイド（取消）済みのため印刷できません"); return; }
+  printReceiptDocByData(r, true);
+}
+function printReceiptDocByData(r, reissue){
+  document.getElementById("prNo").textContent=r.receiptId;
+  document.getElementById("prDate").textContent=r.issueDate||"";
+  document.getElementById("prTo").textContent = partyName(r.partyId, r.partyNameSnap)||"";
+  document.getElementById("prAmount").textContent=yen(r.amount)+"−";
+  document.getElementById("prProviso").textContent=r.proviso||"";
+  document.getElementById("prMethod").textContent=r.payMethod||"";
+  document.getElementById("prRate").textContent = r.taxRate===0.08?"8%":r.taxRate===0?"対象外":"10%";
+  document.getElementById("prEx").textContent=yen(r.amountEx);
+  document.getElementById("prTax").textContent=yen(r.taxAmt);
+  const reg=regNoFor(r.issueDate);
+  document.getElementById("prRegNo").textContent = reg ? "登録番号："+reg : "";
+  document.getElementById("prReissue").textContent = reissue && r.createdAt && r.createdAt.slice(0,10)!==todayStr() ? "（再発行）" : "";
+  fillIssuer("pr");
+  doPrint("receipt");
+}
+
+/* ===== 取引先一覧・ID別実績 ===== */
+function partyStats(pid){
+  const exp = fyExpenses().filter(e=>e.partyId===pid);
+  const sal = fySales().filter(s=>s.partyId===pid && s.status!=="draft" && s.status!=="cancel");
+  const rcs = fyReceipts().filter(r=>r.partyId===pid && !r.invoiceId && r.status!=="void"); // 請求書なしの直接入金（取消は除外）
+  const paySum = exp.reduce((a,e)=>a+(e.amountIn||0),0);
+  const saleSum = sal.reduce((a,s)=>a+(s.total||0),0) + rcs.reduce((a,r)=>a+(r.amount||0),0);
+  const unpaid = sal.filter(s=>s.status==="issued").reduce((a,s)=>a+(s.total||0),0);
+  return {paySum, saleSum, unpaid, expCount:exp.length, saleCount:sal.length+rcs.length};
+}
+function renderPartyList(){
+  const q=(document.getElementById("fPartyText").value||"").trim().toLowerCase();
+  let rows=PARTIES.filter(p=>p.isActive!==false);
+  if(q) rows=rows.filter(p=>((p.name||"")+(p.kana||"")+(p.partyId||"")).toLowerCase().includes(q));
+  document.getElementById("partyTbody").innerHTML = rows.map(p=>{
+    const st=partyStats(p.partyId);
+    const types=(p.type||[]).map(t=>t==="customer"?"入金先":"支払先").join("・");
+    return `<tr><td class="mono">${esc(p.partyId)}</td><td>${esc(p.name)}</td><td>${types}</td>
+      <td>${p.memberClass&&p.memberClass!=="非会員"?esc(p.memberClass):"—"}</td>
+      <td class="num">${yen(st.paySum)}</td><td class="num">${yen(st.saleSum)}</td>
+      <td class="num" style="${st.unpaid?'color:var(--shu);font-weight:700':''}">${yen(st.unpaid)}</td>
+      <td style="white-space:nowrap"><button class="btn btn-p btn-sm" onclick="showPartyDetail('${p.partyId}')">実績</button>
+      <button class="btn btn-s btn-sm" onclick="editParty('${p._id}')">編集</button>
+      <button class="btn btn-danger btn-sm" onclick="deactivateParty('${p._id}')">無効化</button></td></tr>`;
+  }).join("") || `<tr><td colspan="8" class="hint">取引先が未登録です。上のフォームから登録してください。</td></tr>`;
+}
+function exportPartiesExcel(){
+  const rows = PARTIES.filter(p=>p.isActive!==false).map(p=>{
+    const st = partyStats(p.partyId);
+    return { "ID":p.partyId, "名称":p.name, "カナ":p.kana||"",
+      "区分":(p.type||[]).map(t=>t==="customer"?"入金先":"支払先").join("・"),
+      "会員区分":p.memberClass||"非会員",
+      "支払累計（税込）":st.paySum, "売上累計（税込）":st.saleSum, "未入金残高":st.unpaid,
+      "住所":p.address||"", "連絡先":p.contact||"", "先方インボイス登録番号":p.invoiceNo||"",
+      "先方振込先":p.bankInfo||"", "備考":p.note||"" };
+  });
+  const wb=XLSX.utils.book_new();
+  addSheet(wb, rows, "取引先一覧");
+  XLSX.writeFile(wb, `TeamP_取引先一覧_${CURRENT_FY}年度_${todayStr()}.xlsx`);
+  showMsg("取引先一覧をExcel出力しました");
+}
+function showPartyDetail(pid){
+  const p=partyById(pid); if(!p) return;
+  const st=partyStats(pid);
+  document.getElementById("pdId").textContent=pid;
+  document.getElementById("pdName").textContent=p.name;
+  document.getElementById("pdCards").innerHTML=`
+    <div class="sumcard"><div class="t">支払累計（${CURRENT_FY}年度）</div><div class="v">${yen(st.paySum)}</div><div class="s">${st.expCount}件</div></div>
+    <div class="sumcard ok"><div class="t">売上累計（${CURRENT_FY}年度）</div><div class="v">${yen(st.saleSum)}</div><div class="s">${st.saleCount}件</div></div>
+    <div class="sumcard ${st.unpaid?'alert':''}"><div class="t">未入金残高</div><div class="v">${yen(st.unpaid)}</div><div class="s">発行済・未消込の請求書</div></div>`;
+  const hist=[];
+  fyExpenses().filter(e=>e.partyId===pid).forEach(e=>hist.push({date:e.date, kind:"支払", no:e.receiptId, memo:e.desc, out:e.amountIn, in:null, st:e.isTatekae?(e.settled?"精算済":"未精算"):"—"}));
+  fySales().filter(s=>s.partyId===pid && s.status!=="draft").forEach(s=>hist.push({date:s.issueDate, kind:"請求", no:s.invoiceId, memo:s.title, out:null, in:s.total, st:STATUS_LABEL[s.status]}));
+  fyReceipts().filter(r=>r.partyId===pid && !r.invoiceId).forEach(r=>hist.push({date:r.issueDate, kind:"入金", no:r.receiptId, memo:r.proviso, out:null, in:r.status==="void"?0:r.amount, st: r.status==="void"?"領収書取消":"領収書発行済"}));
+  hist.sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  document.getElementById("pdTbody").innerHTML=hist.map(h=>`<tr><td>${esc(h.date)}</td><td>${h.kind}</td>
+    <td class="mono">${esc(h.no)}</td><td>${esc(h.memo)}</td>
+    <td class="num">${h.out!=null?yen(h.out):""}</td><td class="num">${h.in!=null?yen(h.in):""}</td><td>${esc(h.st)}</td></tr>`).join("")
+    || `<tr><td colspan="7" class="hint">この事業年度の取引はありません。</td></tr>`;
+  document.getElementById("partyDetail").style.display="block";
+  document.getElementById("partyDetail").scrollIntoView({behavior:"smooth"});
+}
+function hidePartyDetail(){ document.getElementById("partyDetail").style.display="none"; }
+
+/* ===== 集計 ===== */
+function revenueRecords(){
+  // 収益＝発行済以降の請求書 ＋ 単独発行領収書（請求書と紐づく領収書は二重計上しない）
+  const inv = fySales().filter(s=>s.status==="issued"||s.status==="paid")
+    .map(s=>({kamoku:s.kamoku||"（未設定）", ex:s.subtotal||0, tax:(s.tax10||0)+(s.tax8||0), inTotal:s.total||0, project:s.project||"", partyId:s.partyId}));
+  const rcs = fyReceipts().filter(r=>!r.invoiceId && r.status!=="void")
+    .map(r=>({kamoku:r.kamoku||"（未設定）", ex:r.amountEx||0, tax:r.taxAmt||0, inTotal:r.amount||0, project:"", partyId:r.partyId}));
+  return [...inv, ...rcs];
+}
+function renderSummary(){
+  const exps=fyExpenses();
+  const revs=revenueRecords();
+  const revNormal=revs.filter(r=>!r.kamoku.startsWith("基金"));
+  const fund=revs.filter(r=>r.kamoku.startsWith("基金")).reduce((a,r)=>a+r.inTotal,0);
+  const expSum=exps.reduce((a,e)=>a+(e.amountIn||0),0);
+  const revSum=revNormal.reduce((a,r)=>a+r.inTotal,0);
+  const unpaid=fySales().filter(s=>s.status==="issued").reduce((a,s)=>a+(s.total||0),0);
+  const unsettled=exps.filter(e=>e.isTatekae&&!e.settled).reduce((a,e)=>a+(e.amountIn||0),0);
+  document.getElementById("summaryCards").innerHTML=`
+    <div class="sumcard ok"><div class="t">収益（税込・${CURRENT_FY}年度）</div><div class="v">${yen(revSum)}</div><div class="s">基金受入 ${yen(fund)}（収益外・純資産）</div></div>
+    <div class="sumcard"><div class="t">費用（税込・${CURRENT_FY}年度）</div><div class="v">${yen(expSum)}</div><div class="s">${exps.length}件</div></div>
+    <div class="sumcard ${revSum-expSum<0?'alert':'ok'}"><div class="t">差引（当期収支）</div><div class="v">${yen(revSum-expSum)}</div><div class="s">正味財産増減の概算</div></div>
+    <div class="sumcard ${unpaid?'alert':''}"><div class="t">未入金の請求</div><div class="v">${yen(unpaid)}</div><div class="s">発行済・未消込</div></div>
+    <div class="sumcard ${unsettled?'alert':''}"><div class="t">未精算の立替金</div><div class="v">${yen(unsettled)}</div><div class="s">立替金精算タブへ</div></div>`;
+  // 収益科目別
+  const rmap={};
+  revs.forEach(r=>{ const m=rmap[r.kamoku]=rmap[r.kamoku]||{ex:0,tax:0,inc:0,n:0}; m.ex+=r.ex; m.tax+=r.tax; m.inc+=r.inTotal; m.n++; });
+  document.getElementById("revTbody").innerHTML=Object.entries(rmap).map(([k,m])=>
+    `<tr><td>${esc(k)}</td><td class="num">${yen(m.ex)}</td><td class="num">${yen(m.tax)}</td><td class="num">${yen(m.inc)}</td><td class="num">${m.n}</td></tr>`).join("")
+    || `<tr><td colspan="5" class="hint">この事業年度の収益はありません。</td></tr>`;
+  // 費用科目別
+  const emap={};
+  exps.forEach(e=>{ const m=emap[e.kamoku]=emap[e.kamoku]||{ex:0,tax:0,inc:0,n:0}; m.ex+=e.amountEx||0; m.tax+=e.taxAmt||0; m.inc+=e.amountIn||0; m.n++; });
+  document.getElementById("expSumTbody").innerHTML=Object.entries(emap).map(([k,m])=>
+    `<tr><td>${esc(k)}</td><td class="num">${yen(m.ex)}</td><td class="num">${yen(m.tax)}</td><td class="num">${yen(m.inc)}</td><td class="num">${m.n}</td></tr>`).join("")
+    || `<tr><td colspan="5" class="hint">この事業年度の費用はありません。</td></tr>`;
+  // 事業別
+  const pmap={};
+  revNormal.forEach(r=>{ const k=r.project||"（事業名なし）"; const m=pmap[k]=pmap[k]||{rev:0,exp:0}; m.rev+=r.inTotal; });
+  exps.forEach(e=>{ const k=e.project||"（事業名なし）"; const m=pmap[k]=pmap[k]||{rev:0,exp:0}; m.exp+=e.amountIn||0; });
+  document.getElementById("projTbody").innerHTML=Object.entries(pmap).map(([k,m])=>
+    `<tr><td>${esc(k)}</td><td class="num">${yen(m.rev)}</td><td class="num">${yen(m.exp)}</td><td class="num" style="${m.rev-m.exp<0?'color:var(--shu)':''}">${yen(m.rev-m.exp)}</td></tr>`).join("")
+    || `<tr><td colspan="4" class="hint">データがありません。</td></tr>`;
+  // 取引先別
+  const tmap={};
+  revs.forEach(r=>{ if(!r.partyId) return; const m=tmap[r.partyId]=tmap[r.partyId]||{rev:0,exp:0}; m.rev+=r.inTotal; });
+  exps.forEach(e=>{ if(!e.partyId) return; const m=tmap[e.partyId]=tmap[e.partyId]||{rev:0,exp:0}; m.exp+=e.amountIn||0; });
+  document.getElementById("ptySumTbody").innerHTML=Object.entries(tmap)
+    .sort((a,b)=>(b[1].rev+b[1].exp)-(a[1].rev+a[1].exp))
+    .map(([pid,m])=>`<tr><td class="mono">${esc(pid)}</td><td>${esc(partyName(pid,"（マスタ未登録）"))}</td>
+      <td class="num">${yen(m.rev)}</td><td class="num">${yen(m.exp)}</td><td class="num">${yen(m.rev-m.exp)}</td></tr>`).join("")
+    || `<tr><td colspan="5" class="hint">データがありません。</td></tr>`;
+}
+
+/* ===== 資金繰り表・予算対比 ===== */
+const FY_MONTHS = [4,5,6,7,8,9,10,11,12,1,2,3]; // 事業年度の月順（4月始まり）
+function fyMonthCalYear(fy, m){ return m>=4 ? fy : fy+1; }
+function currentBudget(){ return BUDGETS[String(CURRENT_FY)] || { openingCash:0, revenue:{}, expense:{} }; }
+
+function computeCashflowData(){
+  const b = currentBudget();
+  const opening = b.openingCash || 0;
+  const sales = fySales(), exps = fyExpenses(), rcs = fyReceipts();
+  const monthIncome = FY_MONTHS.map(()=>0), monthExpense = FY_MONTHS.map(()=>0);
+  sales.filter(s=>s.status==="paid" && s.paidDate).forEach(s=>{
+    const m = Number(s.paidDate.split("-")[1]);
+    const idx = FY_MONTHS.indexOf(m);
+    if(idx>-1) monthIncome[idx] += (s.paidAmount || s.total || 0);
+  });
+  rcs.filter(r=>!r.invoiceId && r.status!=="void").forEach(r=>{
+    const m = Number((r.issueDate||"").split("-")[1]);
+    const idx = FY_MONTHS.indexOf(m);
+    if(idx>-1) monthIncome[idx] += (r.amount||0);
+  });
+  exps.forEach(e=>{
+    const m = Number((e.date||"").split("-")[1]);
+    const idx = FY_MONTHS.indexOf(m);
+    if(idx>-1) monthExpense[idx] += (e.amountIn||0);
+  });
+  const startBals=[], endBals=[];
+  let bal = opening;
+  FY_MONTHS.forEach((m,i)=>{
+    startBals.push(bal);
+    bal += monthIncome[i] - monthExpense[i];
+    endBals.push(bal);
+  });
+  const upcomingIn = sales.filter(s=>s.status==="issued").sort((a,b)=>(a.dueDate||"9999").localeCompare(b.dueDate||"9999"));
+  const upcomingInSum = upcomingIn.reduce((a,s)=>a+(s.total||0),0);
+  const upcomingOut = exps.filter(e=>e.isTatekae && !e.settled).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+  const upcomingOutSum = upcomingOut.reduce((a,e)=>a+(e.amountIn||0),0);
+  const forecastBal = bal + upcomingInSum - upcomingOutSum;
+  const revActual = {}, expActual = {};
+  revenueRecords().forEach(r=>{ revActual[r.kamoku] = (revActual[r.kamoku]||0) + r.inTotal; });
+  exps.forEach(e=>{ expActual[e.kamoku] = (expActual[e.kamoku]||0) + (e.amountIn||0); });
+  return { b, opening, monthIncome, monthExpense, startBals, endBals,
+    totalIn: monthIncome.reduce((a,v)=>a+v,0), totalOut: monthExpense.reduce((a,v)=>a+v,0),
+    upcomingIn, upcomingInSum, upcomingOut, upcomingOutSum, forecastBal, revActual, expActual };
+}
+function renderCashflow(){
+  document.getElementById("cfFyLabel1").textContent = CURRENT_FY;
+  document.getElementById("cfFyLabel2").textContent = CURRENT_FY;
+  const openingInput = document.getElementById("cfOpening");
+  const b0 = currentBudget();
+  if(document.activeElement !== openingInput) openingInput.value = b0.openingCash || "";
+  // 入力中の期首残高を優先して再計算（未保存でもプレビューできるように）
+  const d = computeCashflowData();
+  const opening = Number(openingInput.value)||0;
+  if(opening !== d.opening){
+    const startBals=[], endBals=[]; let bal=opening;
+    FY_MONTHS.forEach((m,i)=>{ startBals.push(bal); bal += d.monthIncome[i]-d.monthExpense[i]; endBals.push(bal); });
+    d.opening=opening; d.startBals=startBals; d.endBals=endBals;
+    d.upcomingInSum && (d.forecastBal = endBals[endBals.length-1] + d.upcomingInSum - d.upcomingOutSum);
+  }
+
+  document.getElementById("cfHeadRow").innerHTML = "<th>&nbsp;</th>" + FY_MONTHS.map(m=>`<th class="num">${fyMonthCalYear(CURRENT_FY,m)}/${m}</th>`).join("") + `<th class="num">年度計</th>`;
+  const openingRow = `<tr><td>前月繰越</td>` + d.startBals.map(v=>`<td class="num">${yen(v)}</td>`).join("") + `<td class="num">${yen(d.opening)}</td></tr>`;
+  const incomeRow = `<tr><td>収入</td>` + d.monthIncome.map(v=>`<td class="num">${yen(v)}</td>`).join("") + `<td class="num">${yen(d.totalIn)}</td></tr>`;
+  const expenseRow = `<tr><td>支出</td>` + d.monthExpense.map(v=>`<td class="num">${v?"－"+yen(v):yen(0)}</td>`).join("") + `<td class="num">${d.totalOut?"－"+yen(d.totalOut):yen(0)}</td></tr>`;
+  const balanceRow = `<tr><td><b>月末残高</b></td>` + d.endBals.map(v=>`<td class="num" style="${v<0?'color:var(--shu);font-weight:700':''}">${yen(v)}</td>`).join("") + `<td class="num" style="${d.endBals[d.endBals.length-1]<0?'color:var(--shu);font-weight:700':''}">${yen(d.endBals[d.endBals.length-1])}</td></tr>`;
+  document.getElementById("cfBody").innerHTML = openingRow + incomeRow + expenseRow + balanceRow;
+
+  document.getElementById("cfForecastCards").innerHTML = `
+    <div class="sumcard ok"><div class="t">入金予定（未回収の請求書）</div><div class="v">${yen(d.upcomingInSum)}</div><div class="s">${d.upcomingIn.length}件</div></div>
+    <div class="sumcard ${d.upcomingOutSum?'alert':''}"><div class="t">支出予定（未精算の立替金）</div><div class="v">${yen(d.upcomingOutSum)}</div><div class="s">${d.upcomingOut.length}件</div></div>
+    <div class="sumcard ${d.forecastBal<0?'alert':'ok'}"><div class="t">予測残高（年度末見込＋予定分）</div><div class="v">${yen(d.forecastBal)}</div><div class="s">現在の月末残高に予定分を加減算</div></div>`;
+  document.getElementById("cfInTbody").innerHTML = d.upcomingIn.map(s=>
+    `<tr><td>${esc(s.dueDate||"未設定")}</td><td>${esc(partyName(s.partyId,s.partyNameSnap))}</td><td class="num">${yen(s.total)}</td></tr>`
+  ).join("") || `<tr><td colspan="3" class="hint">未回収の請求書はありません。</td></tr>`;
+  document.getElementById("cfOutTbody").innerHTML = d.upcomingOut.map(e=>
+    `<tr><td>${esc(e.date)}</td><td>${esc(PAY_LABELS[e.payType]||e.payType)}</td><td class="num">${yen(e.amountIn)}</td></tr>`
+  ).join("") || `<tr><td colspan="3" class="hint">未精算の立替金はありません。</td></tr>`;
+
+  const revRows = KAMOKU_REV.map(k=>budgetRow(k, d.b.revenue?.[k], d.revActual[k]||0, "achieve")).join("");
+  document.getElementById("budgetRevBody").innerHTML = revRows;
+  let expAll = [];
+  Object.values(KAMOKU_EXP).forEach(list=>expAll.push(...list));
+  const expRows = expAll.map(k=>budgetRow(k, d.b.expense?.[k], d.expActual[k]||0, "use")).join("");
+  document.getElementById("budgetExpBody").innerHTML = expRows;
+}
+function yenDiff(n){
+  if(n < 0) return `<span style="color:var(--shu);font-weight:700">△${yen(Math.abs(n))}</span>`;
+  if(n > 0) return `<span>＋${yen(n)}</span>`;
+  return `<span>${yen(0)}</span>`;
+}
+function budgetRow(kamoku, budgetVal, actualVal, mode){
+  const bv = Number(budgetVal)||0;
+  const diff = actualVal - bv;
+  const rate = bv ? Math.round(actualVal/bv*100) : null;
+  const rateStr = rate==null ? "—" : rate+"%";
+  const rateColor = mode==="use" && rate!=null && rate>100 ? "color:var(--shu);font-weight:700" : "";
+  return `<tr><td>${esc(kamoku)}</td>
+    <td><input type="number" class="budget-input" data-kamoku="${esc(kamoku)}" data-mode="${mode}" value="${budgetVal||""}" placeholder="0" style="padding:4px 6px"></td>
+    <td class="num">${yen(actualVal)}</td>
+    <td class="num">${yenDiff(diff)}</td>
+    <td class="num" style="${rateColor}">${rateStr}</td></tr>`;
+}
+function saveBudget(){
+  const revenue = {}, expense = {};
+  document.querySelectorAll('#budgetRevBody .budget-input').forEach(inp=>{ if(inp.value) revenue[inp.dataset.kamoku] = Number(inp.value); });
+  document.querySelectorAll('#budgetExpBody .budget-input').forEach(inp=>{ if(inp.value) expense[inp.dataset.kamoku] = Number(inp.value); });
+  const data = { fiscalYear: CURRENT_FY, openingCash: Number(document.getElementById("cfOpening").value)||0,
+    revenue, expense, updatedAt: nowIso(), updatedBy: uid() };
+  db.collection("budgets").doc(String(CURRENT_FY)).set(data, {merge:true}).then(()=>showMsg("残高・予算を保存しました"));
+}
+function exportCashflowExcel(){
+  const d = computeCashflowData();
+  const openingInput = document.getElementById("cfOpening");
+  const opening = Number(openingInput.value)||0;
+  let startBals=d.startBals, endBals=d.endBals;
+  if(opening !== d.opening){
+    startBals=[]; endBals=[]; let bal=opening;
+    FY_MONTHS.forEach((m,i)=>{ startBals.push(bal); bal += d.monthIncome[i]-d.monthExpense[i]; endBals.push(bal); });
+  }
+  const cfRows = FY_MONTHS.map((m,i)=>({ "月":`${fyMonthCalYear(CURRENT_FY,m)}/${m}`,
+    "前月繰越":startBals[i], "収入":d.monthIncome[i], "支出":d.monthExpense[i], "月末残高":endBals[i] }));
+  cfRows.push({ "月":"年度計", "前月繰越":opening, "収入":d.totalIn, "支出":d.totalOut, "月末残高":endBals[endBals.length-1] });
+
+  const forecastRows = [
+    ...d.upcomingIn.map(s=>({"種類":"入金予定","期日":s.dueDate||"未設定","相手":partyName(s.partyId,s.partyNameSnap),"金額":s.total})),
+    ...d.upcomingOut.map(e=>({"種類":"支出予定（未精算立替金）","期日":e.date,"相手":PAY_LABELS[e.payType]||e.payType,"金額":e.amountIn})),
+  ];
+
+  const budgetRows = [];
+  KAMOKU_REV.forEach(k=>{
+    const bv=Number(d.b.revenue?.[k])||0, av=d.revActual[k]||0;
+    budgetRows.push({"区分":"収益","科目":k,"年間予算":bv,"実績":av,"差異":av-bv,"達成率":bv?Math.round(av/bv*100)+"%":"—"});
+  });
+  let expAll=[]; Object.values(KAMOKU_EXP).forEach(list=>expAll.push(...list));
+  expAll.forEach(k=>{
+    const bv=Number(d.b.expense?.[k])||0, av=d.expActual[k]||0;
+    budgetRows.push({"区分":"費用","科目":k,"年間予算":bv,"実績":av,"差異":av-bv,"執行率":bv?Math.round(av/bv*100)+"%":"—"});
+  });
+
+  const wb=XLSX.utils.book_new();
+  addSheet(wb, cfRows, "資金繰り表");
+  addSheet(wb, forecastRows, "入出金予定");
+  addSheet(wb, budgetRows, "予算対比");
+  XLSX.writeFile(wb, `TeamP_資金繰り予算_${CURRENT_FY}年度_${todayStr()}.xlsx`);
+  showMsg("資金繰り・予算をExcel出力しました");
+}
+
+/* ===== Excel出力 ===== */
+function exportExcel(){
+  const wb=XLSX.utils.book_new();
+  const rate=r=> r===0.08?"8%":r===0?"対象外":"10%";
+  // 経費台帳
+  const expRows=fyExpenses().slice().sort((a,b)=>(a.receiptId||"").localeCompare(b.receiptId||"")).map(e=>({
+    "証憑番号":e.receiptId,"支払日":e.date,"勘定科目":e.kamoku,"取引先ID":e.partyId||"","支払先":e.vendor||"",
+    "品目・摘要":e.desc,"事業名":e.project||"","支払区分":PAY_LABELS[e.payType]||e.payType,"支払方法":e.payMethod||"",
+    "税率":rate(e.taxRate),"税抜金額":e.amountEx,"消費税額":e.taxAmt,"税込金額":e.amountIn,
+    "インボイス":e.invoice||"","証憑種類":e.proof||"","精算状況":e.isTatekae?(e.settled?"精算済":"未精算"):"—",
+    "精算日":e.settledDate||"","精算方法":e.settledMethod||"","備考":e.note||"","画像リンク":e.imageUrl||""}));
+  addSheet(wb, expRows, "経費台帳");
+  // 売上台帳
+  const salRows=fySales().slice().sort((a,b)=>(a.invoiceId||"").localeCompare(b.invoiceId||"")).map(s=>({
+    "請求書番号":s.invoiceId,"発行日":s.issueDate,"支払期限":s.dueDate||"","取引先ID":s.partyId,"請求先":partyName(s.partyId,s.partyNameSnap),
+    "件名":s.title,"収益科目":s.kamoku||"","事業名":s.project||"","小計(税抜)":s.subtotal,"消費税10%":s.tax10||0,"消費税8%":s.tax8||0,
+    "合計(税込)":s.total,"状態":STATUS_LABEL[s.status],"入金日":s.paidDate||"","入金額":s.paidAmount||"","領収書番号":s.receiptId||""}));
+  addSheet(wb, salRows, "売上台帳");
+  // 発行領収書
+  const rcRows=fyReceipts().slice().sort((a,b)=>(a.receiptId||"").localeCompare(b.receiptId||"")).map(r=>({
+    "領収書番号":r.receiptId,"発行日":r.issueDate,"取引先ID":r.partyId,"宛名":partyName(r.partyId,r.partyNameSnap),
+    "但し書き":r.proviso,"収益科目":r.kamoku||"","税込金額":r.amount,"税率":rate(r.taxRate),"税抜金額":r.amountEx,"消費税額":r.taxAmt,
+    "支払方法":r.payMethod||"","対応請求書":r.invoiceId||"","状態":RECEIPT_STATUS_LABEL[r.status||"issued"],
+    "取消理由":r.voidReason||"","差し替え元":r.replacesReceiptId?(RECEIPTS.find(x=>x._id===r.replacesReceiptId)||{}).receiptId||"":"",
+    "差し替え先":r.replacedByReceiptId?(RECEIPTS.find(x=>x._id===r.replacedByReceiptId)||{}).receiptId||"":""}));
+  addSheet(wb, rcRows, "発行領収書");
+  // 科目別集計
+  const sumRows=[];
+  const emap={};
+  fyExpenses().forEach(e=>{ const m=emap[e.kamoku]=emap[e.kamoku]||{ex:0,tax:0,inc:0,n:0}; m.ex+=e.amountEx||0; m.tax+=e.taxAmt||0; m.inc+=e.amountIn||0; m.n++; });
+  const rmap={};
+  revenueRecords().forEach(r=>{ const m=rmap[r.kamoku]=rmap[r.kamoku]||{ex:0,tax:0,inc:0,n:0}; m.ex+=r.ex; m.tax+=r.tax; m.inc+=r.inTotal; m.n++; });
+  Object.entries(rmap).forEach(([k,m])=>sumRows.push({"区分":"収益","科目":k,"税抜":m.ex,"消費税":m.tax,"税込":m.inc,"件数":m.n}));
+  Object.entries(emap).forEach(([k,m])=>sumRows.push({"区分":"費用","科目":k,"税抜":m.ex,"消費税":m.tax,"税込":m.inc,"件数":m.n}));
+  addSheet(wb, sumRows, "科目別集計");
+  // 取引先別集計
+  const tmap={};
+  revenueRecords().forEach(r=>{ if(!r.partyId) return; const m=tmap[r.partyId]=tmap[r.partyId]||{rev:0,exp:0}; m.rev+=r.inTotal; });
+  fyExpenses().forEach(e=>{ if(!e.partyId) return; const m=tmap[e.partyId]=tmap[e.partyId]||{rev:0,exp:0}; m.exp+=e.amountIn||0; });
+  const ptyRows=Object.entries(tmap).map(([pid,m])=>({"取引先ID":pid,"取引先":partyName(pid,""),"売上(税込)":m.rev,"支払(税込)":m.exp,"差引":m.rev-m.exp}));
+  addSheet(wb, ptyRows, "取引先別集計");
+  XLSX.writeFile(wb, `TeamP_会計_${CURRENT_FY}年度_${todayStr()}.xlsx`);
+  showMsg("Excelを出力しました");
+}
+
+/* ===== v1データ移行 ===== */
+async function migrateV1(){
+  if(!confirm("旧形式（R2026-XXX）の証憑番号を TP-E-{事業年度}-XXX へ変換し、全経費に事業年度を付与します。実行しますか？")) return;
+  const snap = await db.collection("expenses").get();
+  const batch = db.batch();
+  let converted=0, fyAdded=0;
+  const maxSeq={}; // fy → max連番
+  snap.docs.forEach(d=>{
+    const e=d.data();
+    const upd={};
+    const fy = e.fiscalYear ?? fiscalYearOf(e.date);
+    if(e.fiscalYear==null){ upd.fiscalYear=fy; fyAdded++; }
+    const mOld=/^R(\d{4})-(\d{3})$/.exec(e.receiptId||"");
+    if(mOld){
+      upd.receiptId = `TP-E-${fy}-${mOld[2]}`;
+      converted++;
+    }
+    const mNew=/^TP-E-(\d{4})-(\d{3})$/.exec(upd.receiptId||e.receiptId||"");
+    if(mNew){ const y=Number(mNew[1]), n=Number(mNew[2]); if(!maxSeq[y]||n>maxSeq[y]) maxSeq[y]=n; }
+    if(Object.keys(upd).length){ upd.updatedAt=nowIso(); upd.updatedBy=uid()+"（移行）"; batch.set(d.ref, upd, {merge:true}); }
+  });
+  await batch.commit();
+  // カウンタを最大連番に合わせる
+  for(const [y,n] of Object.entries(maxSeq)){
+    await db.collection("counters").doc("E-"+y).set({last:n},{merge:true});
+  }
+  document.getElementById("migrateResult").textContent=`完了：番号変換 ${converted}件／事業年度付与 ${fyAdded}件。番号を変えた領収書は、Google Drive上の画像ファイル名と紙原本のラベルも新番号へ振り替えてください。`;
+  showMsg("移行が完了しました");
+}
+
+/* ===== タブ・描画 ===== */
+document.getElementById("tabs").addEventListener("click", e=>{
+  if(e.target.dataset.page) switchTab(e.target.dataset.page);
+});
+function switchTab(pageId){
+  document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active", b.dataset.page===pageId));
+  document.querySelectorAll(".page").forEach(p=>p.classList.toggle("active", p.id===pageId));
+}
+function renderAll(){
+  renderExpenseList();
+  renderTatekae();
+  renderSalesList();
+  renderDocs();
+  renderPartyList();
+  renderSummary();
+  renderCashflow();
+}
+document.querySelectorAll(".modal-bg").forEach(m=>m.addEventListener("click", e=>{ if(e.target===m) m.classList.remove("open"); }));
+addItemRow();
+</script>
+</body>
+</html>
