@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Team P 帳票管理システム</title>
+</head>
+<body>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&display=swap');
+
+  #tp-ledger-root {
+    --bg: #F4F2EC;
+    --surface: #FFFFFF;
+    --surface-2: #FBFAF6;
+    --ink: #22262B;
+    --ink-soft: #5B6067;
+    --border: #E1DCD0;
+    --primary: #2C3E66;
+    --primary-soft: #E7EAF1;
+    --accent: #A9793C;
+    --accent-soft: #F3E8D6;
+    --success: #3F7859;
+    --success-soft: #E4EFE8;
+    --danger: #A23B3B;
+    --danger-soft: #F5E5E2;
+    --radius: 10px;
+    font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    min-height: 100%;
+    display: flex;
+    box-sizing: border-box;
+  }
+  #tp-ledger-root *, #tp-ledger-root *::before, #tp-ledger-root *::after {
+    box-sizing: border-box;
+  }
+  #tp-ledger-root .brand-font {
+    font-family: 'Zen Kaku Gothic New', 'Noto Sans JP', sans-serif;
+  }
+
+  /* ---- Layout ---- */
+  #tp-ledger-root {
+    width: 100%;
+    min-height: 640px;
+  }
+  .tp-shell {
+    display: flex;
+    width: 100%;
+    min-height: 640px;
+  }
+  .tp-sidebar {
+    width: 232px;
+    flex-shrink: 0;
+    background: var(--primary);
+    color: #EDEFF4;
+    padding: 24px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .tp-sidebar-header {
+    padding: 0 8px 20px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+    margin-bottom: 16px;
+  }
+  .tp-sidebar-title {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    line-height: 1.4;
+  }
+  .tp-sidebar-sub {
+    font-size: 11px;
+    color: #B9C2D6;
+    margin-top: 4px;
+    letter-spacing: 0.04em;
+  }
+  .tp-nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    color: #D7DCE8;
+    font-family: inherit;
+    font-size: 13.5px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background .15s ease, color .15s ease;
+  }
+  .tp-nav-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+  .tp-nav-btn.active { background: #fff; color: var(--primary); font-weight: 700; }
+  .tp-nav-btn .tp-badge {
+    margin-left: auto;
+    font-size: 11px;
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    border-radius: 999px;
+    padding: 1px 7px;
+    min-width: 20px;
+    text-align: center;
+  }
+  .tp-nav-btn.active .tp-badge { background: var(--primary-soft); color: var(--primary); }
+
+  .tp-sidebar-footer {
+    margin-top: auto;
+    padding: 12px 8px 0 8px;
+    border-top: 1px solid rgba(255,255,255,0.15);
+    font-size: 10.5px;
+    color: #93A0BD;
+    line-height: 1.7;
+  }
+  .tp-p-dots {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+  .tp-p-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent);
+    opacity: 0.85;
+  }
+
+  .tp-main {
+    flex: 1;
+    min-width: 0;
+    padding: 28px 34px 60px 34px;
+  }
+  .tp-main-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 22px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .tp-main-title {
+    font-size: 22px;
+    font-weight: 700;
+  }
+  .tp-main-desc {
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    margin-top: 4px;
+  }
+  .tp-status-pill {
+    font-size: 11px;
+    color: var(--ink-soft);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    padding: 5px 10px;
+    border-radius: 999px;
+  }
+
+  /* ---- Cards / Forms ---- */
+  .tp-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+    margin-bottom: 22px;
+  }
+  .tp-card-title {
+    font-size: 14.5px;
+    font-weight: 700;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .tp-card-title::before {
+    content: "";
+    width: 3px; height: 14px;
+    background: var(--accent);
+    display: inline-block;
+    border-radius: 2px;
+  }
+  .tp-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px 16px;
+  }
+  .tp-field { display: flex; flex-direction: column; gap: 6px; }
+  .tp-field.wide { grid-column: 1 / -1; }
+  .tp-field label {
+    font-size: 12px;
+    color: var(--ink-soft);
+    font-weight: 500;
+  }
+  .tp-field input, .tp-field select, .tp-field textarea {
+    font-family: inherit;
+    font-size: 13.5px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface-2);
+    color: var(--ink);
+    outline: none;
+    transition: border-color .12s ease, box-shadow .12s ease;
+  }
+  .tp-field textarea { resize: vertical; min-height: 56px; font-family: inherit; }
+  .tp-field input:focus, .tp-field select:focus, .tp-field textarea:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-soft);
+  }
+  .tp-form-actions {
+    margin-top: 16px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .tp-btn {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 9px 18px;
+    border-radius: 7px;
+    border: none;
+    cursor: pointer;
+    transition: opacity .12s ease, transform .12s ease;
+  }
+  .tp-btn:active { transform: scale(0.97); }
+  .tp-btn-primary { background: var(--primary); color: #fff; }
+  .tp-btn-primary:hover { opacity: 0.92; }
+  .tp-btn-ghost { background: transparent; color: var(--ink-soft); border: 1px solid var(--border); }
+  .tp-btn-ghost:hover { background: var(--surface-2); }
+  .tp-btn-danger-text { background: transparent; color: var(--danger); border: none; font-weight: 500; font-size: 12.5px; cursor: pointer; padding: 4px 6px; }
+  .tp-btn-danger-text:hover { text-decoration: underline; }
+  .tp-btn-edit-text { background: transparent; color: var(--primary); border: none; font-weight: 500; font-size: 12.5px; cursor: pointer; padding: 4px 6px; }
+  .tp-btn-edit-text:hover { text-decoration: underline; }
+
+  /* ---- Table ---- */
+  .tp-table-wrap { overflow-x: auto; }
+  table.tp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .tp-table th {
+    text-align: left;
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    font-weight: 700;
+    padding: 9px 10px;
+    border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+  }
+  .tp-table td {
+    padding: 10px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .tp-table tr:hover td { background: var(--surface-2); }
+  .tp-empty {
+    text-align: center;
+    color: var(--ink-soft);
+    font-size: 13px;
+    padding: 30px 10px;
+  }
+  .tp-tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .tp-tag-pending { background: var(--accent-soft); color: var(--accent); }
+  .tp-tag-approved { background: var(--success-soft); color: var(--success); }
+  .tp-tag-rejected { background: var(--danger-soft); color: var(--danger); }
+  .tp-tag-neutral { background: var(--primary-soft); color: var(--primary); }
+
+  /* ---- Dashboard ---- */
+  .tp-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 26px;
+  }
+  .tp-kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    cursor: pointer;
+    transition: border-color .12s ease, transform .12s ease;
+  }
+  .tp-kpi:hover { border-color: var(--primary); transform: translateY(-1px); }
+  .tp-kpi-num {
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    font-size: 30px;
+    font-weight: 900;
+    color: var(--primary);
+    line-height: 1;
+  }
+  .tp-kpi-label {
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin-top: 8px;
+  }
+  .tp-kpi-sub {
+    font-size: 11px;
+    color: var(--accent);
+    margin-top: 4px;
+    font-weight: 700;
+  }
+  .tp-hero-strip {
+    background: var(--primary);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 22px 26px;
+    margin-bottom: 26px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+  .tp-hero-strip h2 {
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    font-size: 19px;
+    font-weight: 700;
+    margin: 0 0 6px 0;
+  }
+  .tp-hero-strip p {
+    font-size: 12.5px;
+    color: #C7CFE2;
+    margin: 0;
+    max-width: 480px;
+    line-height: 1.7;
+  }
+  .tp-hero-dots { display: flex; gap: 10px; }
+  .tp-hero-p {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.3);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Zen Kaku Gothic New', sans-serif;
+    font-weight: 900;
+    font-size: 14px;
+  }
+
+  .tp-loading {
+    padding: 40px;
+    text-align: center;
+    color: var(--ink-soft);
+    font-size: 13px;
+  }
+
+  @media (max-width: 820px) {
+    .tp-shell { flex-direction: column; }
+    .tp-sidebar { width: 100%; flex-direction: row; align-items: center; overflow-x: auto; padding: 14px 12px; gap: 6px; }
+    .tp-sidebar-header, .tp-sidebar-footer { display: none; }
+    .tp-nav-btn { flex-shrink: 0; }
+    .tp-main { padding: 20px 16px 50px 16px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #tp-ledger-root * { transition: none !important; }
+  }
+</style>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<div id="tp-login-screen" style="display:flex;align-items:center;justify-content:center;min-height:640px;font-family:'Noto Sans JP',sans-serif;background:#F4F2EC;">
+  <div style="background:#fff;border:1px solid #E1DCD0;border-radius:10px;padding:32px 30px;width:100%;max-width:340px;">
+    <div style="font-weight:700;font-size:16px;margin-bottom:2px;">Team P 帳票管理システム</div>
+    <div style="font-size:12px;color:#5B6067;margin-bottom:18px;">pkeihiseisanと同じアカウントでログインしてください</div>
+    <form id="tp-login-form">
+      <div style="margin-bottom:12px;">
+        <label style="font-size:12px;color:#5B6067;display:block;margin-bottom:4px;">メールアドレス</label>
+        <input type="email" id="tp-login-email" required style="width:100%;padding:8px 10px;border:1px solid #E1DCD0;border-radius:7px;font-size:13.5px;box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="font-size:12px;color:#5B6067;display:block;margin-bottom:4px;">パスワード</label>
+        <input type="password" id="tp-login-password" required style="width:100%;padding:8px 10px;border:1px solid #E1DCD0;border-radius:7px;font-size:13.5px;box-sizing:border-box;">
+      </div>
+      <div id="tp-login-error" style="color:#A23B3B;font-size:12px;margin-bottom:10px;"></div>
+      <button type="submit" style="width:100%;padding:10px;background:#2C3E66;color:#fff;border:none;border-radius:7px;font-weight:700;font-size:13.5px;cursor:pointer;">ログイン</button>
+    </form>
+  </div>
+</div>
+
+<div id="tp-ledger-root" style="display:none;">
+  <div class="tp-shell">
+    <nav class="tp-sidebar" id="tp-sidebar"></nav>
+    <main class="tp-main" id="tp-main">
+      <div class="tp-loading">読み込み中…</div>
+    </main>
+  </div>
+</div>
+
+<script>
+(function() {
+  "use strict";
+
+  var REGISTERS = [
+    {
+      key: "compensation",
+      label: "役員報酬支払管理",
+      icon: "💴",
+      title: "役員報酬支払記録",
+      desc: "役員報酬規程・経理規程に基づく支払記録（現金の動きはpkeihiseisanの経費「役員報酬」科目にも記帳してください）",
+      fields: [
+        { name: "resolutionDate", label: "理事会決議日", type: "date" },
+        { name: "director", label: "対象理事", type: "text", required: true, placeholder: "例）土井 雅人（代表理事）" },
+        { name: "category", label: "区分", type: "select", options: ["代表理事　定例報酬", "理事　臨時報酬", "監事報酬"] },
+        { name: "amount", label: "支払金額（円）", type: "number", required: true },
+        { name: "withholding", label: "源泉徴収税額（円）", type: "number" },
+        { name: "paymentDate", label: "支払日", type: "date" },
+        { name: "budgetCheck", label: "総会決議総額の範囲内か", type: "select", options: ["範囲内", "要確認"], statusField: true },
+        { name: "note", label: "備考", type: "textarea", wide: true },
+      ],
+      columns: ["resolutionDate", "director", "category", "amount", "total", "paymentDate", "budgetCheck"],
+      computeTotal: function(item) {
+        return (Number(item.amount) || 0) - (Number(item.withholding) || 0);
+      },
+    },
+    {
+      key: "assets",
+      label: "固定資産台帳",
+      icon: "🗄",
+      title: "固定資産台帳",
+      desc: "経理規程 第13条に基づく固定資産の管理記録",
+      fields: [
+        { name: "name", label: "資産名", type: "text", required: true },
+        { name: "acquiredDate", label: "取得年月日", type: "date" },
+        { name: "amount", label: "取得価額（円）", type: "number" },
+        { name: "location", label: "保管場所", type: "text" },
+        { name: "status", label: "状況", type: "select", options: ["使用中", "除却"], statusField: true },
+        { name: "note", label: "備考（耐用年数等）", type: "textarea", wide: true },
+      ],
+      columns: ["name", "acquiredDate", "amount", "location", "status"],
+    },
+    {
+      key: "seal",
+      label: "印章使用簿",
+      icon: "🔴",
+      title: "印章使用簿",
+      desc: "文書・印章管理規程 第5条に基づく押印記録",
+      fields: [
+        { name: "date", label: "押印日", type: "date", required: true },
+        { name: "sealType", label: "印章の種類", type: "select", options: ["法人印（角印）", "代表者印（丸印）", "銀行印"] },
+        { name: "docName", label: "押印文書名", type: "text", required: true },
+        { name: "reason", label: "押印理由", type: "text" },
+        { name: "requester", label: "申請者", type: "text" },
+        { name: "approver", label: "承認者", type: "text" },
+        { name: "note", label: "備考", type: "textarea", wide: true },
+      ],
+      columns: ["date", "sealType", "docName", "requester", "approver"],
+    },
+    {
+      key: "conflict",
+      label: "利益相反取引申請",
+      icon: "⚖",
+      title: "利益相反取引承認申請書",
+      desc: "利益相反（特別利益供与防止）管理規程 第5条に基づく申請記録",
+      fields: [
+        { name: "date", label: "申請日", type: "date", required: true },
+        { name: "director", label: "申請理事名", type: "text", required: true },
+        { name: "relatedEntity", label: "関係法人等の名称", type: "text" },
+        { name: "content", label: "取引内容", type: "textarea", wide: true },
+        { name: "terms", label: "取引条件（金額等）", type: "text" },
+        { name: "status", label: "承認状況", type: "select", options: ["審議中", "承認", "否認"], statusField: true },
+        { name: "resolutionDate", label: "理事会決議日", type: "date" },
+        { name: "note", label: "備考", type: "textarea", wide: true },
+      ],
+      columns: ["date", "director", "relatedEntity", "status", "resolutionDate"],
+    },
+    {
+      key: "privacy",
+      label: "個人情報開示請求",
+      icon: "🔒",
+      title: "個人情報開示等請求書",
+      desc: "個人情報保護規程 第11条に基づく請求受付記録",
+      fields: [
+        { name: "date", label: "受付日", type: "date", required: true },
+        { name: "requester", label: "請求者名", type: "text", required: true },
+        { name: "requestType", label: "請求内容", type: "select", options: ["利用目的の通知", "開示", "訂正", "追加", "削除", "利用停止", "消去"] },
+        { name: "verifyMethod", label: "本人確認方法", type: "text" },
+        { name: "status", label: "対応状況", type: "select", options: ["受付", "対応中", "完了"], statusField: true },
+        { name: "completedDate", label: "完了日", type: "date" },
+        { name: "note", label: "備考", type: "textarea", wide: true },
+      ],
+      columns: ["date", "requester", "requestType", "status", "completedDate"],
+    },
+  ];
+
+  var COLUMN_LABELS = {};
+  REGISTERS.forEach(function(r) {
+    r.fields.forEach(function(f) { COLUMN_LABELS[f.name] = f.label; });
+  });
+  COLUMN_LABELS.total = "差引支払額（円）";
+
+  function columnLabel(reg, c) {
+    if (c === "total") return reg.totalLabel || COLUMN_LABELS.total;
+    var f = reg.fields.filter(function(x) { return x.name === c; })[0];
+    return f ? f.label : (COLUMN_LABELS[c] || c);
+  }
+
+  var state = {
+    activeTab: "dashboard",
+    data: {},        // key -> array of items
+    loaded: {},       // key -> bool
+    editingId: {},    // key -> id being edited, or null
+    storageOk: true,
+  };
+
+  REGISTERS.forEach(function(r) { state.data[r.key] = []; state.loaded[r.key] = false; state.editingId[r.key] = null; });
+
+  function uid() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  function escapeHtml(str) {
+    if (str === undefined || str === null) return "";
+    return String(str)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function fmtNumber(n) {
+    if (n === undefined || n === null || n === "") return "";
+    var num = Number(n);
+    if (isNaN(num)) return String(n);
+    return num.toLocaleString("ja-JP");
+  }
+
+  /* ===== Firestore（pkeihiseisanと同じプロジェクトを共有。コレクション名は ledger_<key>） ===== */
+  var firebaseConfig = {
+    apiKey: "AIzaSyDZq5jRXy4VZxwgI1m9ZfhPAWsKyCTzDNY",
+    authDomain: "pkeihiseisan.firebaseapp.com",
+    projectId: "pkeihiseisan",
+    storageBucket: "pkeihiseisan.firebasestorage.app",
+    messagingSenderId: "160275801146",
+    appId: "1:160275801146:web:aa8da14d5b9bc89f888103"
+  };
+  firebase.initializeApp(firebaseConfig);
+  var db = firebase.firestore();
+  var auth = firebase.auth();
+  var unsubscribers = {};
+
+  function collectionRef(key) {
+    return db.collection("ledger_" + key);
+  }
+
+  function attachRealtimeListeners() {
+    REGISTERS.forEach(function(reg) {
+      unsubscribers[reg.key] = collectionRef(reg.key).onSnapshot(function(snap) {
+        state.data[reg.key] = snap.docs.map(function(d) {
+          return Object.assign({ id: d.id }, d.data());
+        });
+        state.loaded[reg.key] = true;
+        state.storageOk = true;
+        updateSidebarBadges();
+        if (state.activeTab === "dashboard") {
+          renderDashboard();
+        } else if (state.activeTab === reg.key && !state.editingId[reg.key]) {
+          renderRegisterPage(reg);
+        }
+      }, function(err) {
+        state.storageOk = false;
+        console.error("Firestore同期エラー（" + reg.key + "）", err);
+      });
+    });
+  }
+
+  function updateSidebarBadges() {
+    REGISTERS.forEach(function(r) {
+      var badge = document.querySelector('.tp-nav-btn[data-tab="' + r.key + '"] .tp-badge');
+      if (badge) badge.textContent = state.data[r.key].length;
+    });
+  }
+
+  function exportRegisterExcel(reg) {
+    if (typeof XLSX === "undefined") {
+      alert("Excel出力用のライブラリを読み込めませんでした。通信環境をご確認のうえ、ページを再読み込みしてください。");
+      return;
+    }
+    var items = state.data[reg.key].slice().sort(function(a, b) {
+      var da = a.date || a.acquiredDate || a.resolutionDate || "";
+      var db = b.date || b.acquiredDate || b.resolutionDate || "";
+      return da.localeCompare(db);
+    });
+
+    var rows = items.map(function(item) {
+      var row = {};
+      reg.columns.forEach(function(c) {
+        var label = columnLabel(reg, c);
+        if (c === "total" && reg.computeTotal) {
+          row[label] = reg.computeTotal(item);
+          return;
+        }
+        var field = reg.fields.filter(function(f) { return f.name === c; })[0];
+        var raw = item[c];
+        if (field && field.type === "number") {
+          row[label] = raw === "" || raw === undefined ? "" : Number(raw);
+        } else {
+          row[label] = raw || "";
+        }
+      });
+      // 備考など columns に含まれないテキスト項目も、あれば末尾に付与
+      reg.fields.forEach(function(f) {
+        if (reg.columns.indexOf(f.name) === -1) {
+          row[f.label] = item[f.name] || "";
+        }
+      });
+      return row;
+    });
+
+    if (rows.length === 0) {
+      alert("出力するデータがありません。まずは記録を1件登録してください。");
+      return;
+    }
+
+    var ws = XLSX.utils.json_to_sheet(rows);
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, reg.label.slice(0, 28));
+    var today = new Date();
+    var ymd = today.getFullYear() + "" + String(today.getMonth() + 1).padStart(2, "0") + String(today.getDate()).padStart(2, "0");
+    XLSX.writeFile(wb, "TeamP_" + reg.label + "_" + ymd + ".xlsx");
+  }
+
+  function exportRegistersByKeys(keys) {
+    if (typeof XLSX === "undefined") {
+      alert("Excel出力用のライブラリを読み込めませんでした。通信環境をご確認のうえ、ページを再読み込みしてください。");
+      return;
+    }
+    if (!keys || keys.length === 0) {
+      alert("出力する帳票を1つ以上選択してください。");
+      return;
+    }
+    var wb = XLSX.utils.book_new();
+    REGISTERS.forEach(function(reg) {
+      if (keys.indexOf(reg.key) === -1) return;
+      var items = state.data[reg.key];
+      var headerLabels = reg.columns.map(function(c) { return columnLabel(reg, c); })
+        .concat(reg.fields.filter(function(f) { return reg.columns.indexOf(f.name) === -1; }).map(function(f) { return f.label; }));
+
+      var ws;
+      if (!items || items.length === 0) {
+        ws = XLSX.utils.aoa_to_sheet([headerLabels]);
+      } else {
+        var rows = items.map(function(item) {
+          var row = {};
+          reg.columns.forEach(function(c) {
+            var label = columnLabel(reg, c);
+            if (c === "total" && reg.computeTotal) { row[label] = reg.computeTotal(item); return; }
+            var field = reg.fields.filter(function(f) { return f.name === c; })[0];
+            var raw = item[c];
+            row[label] = (field && field.type === "number") ? (raw === "" || raw === undefined ? "" : Number(raw)) : (raw || "");
+          });
+          reg.fields.forEach(function(f) {
+            if (reg.columns.indexOf(f.name) === -1) row[f.label] = item[f.name] || "";
+          });
+          return row;
+        });
+        ws = XLSX.utils.json_to_sheet(rows);
+      }
+      XLSX.utils.book_append_sheet(wb, ws, reg.label.slice(0, 28));
+    });
+    var today = new Date();
+    var ymd = today.getFullYear() + "" + String(today.getMonth() + 1).padStart(2, "0") + String(today.getDate()).padStart(2, "0");
+    var suffix = keys.length === REGISTERS.length ? "一括出力" : keys.map(function(k) {
+      return (REGISTERS.filter(function(r){ return r.key===k; })[0] || {}).label || k;
+    }).join("・");
+    XLSX.writeFile(wb, "TeamP_帳票管理システム_" + suffix + "_" + ymd + ".xlsx");
+  }
+
+  function tagClassForStatus(val) {
+    if (["承認済", "承認", "完了"].indexOf(val) !== -1) return "tp-tag-approved";
+    if (["否認"].indexOf(val) !== -1) return "tp-tag-rejected";
+    if (["未承認", "審議中", "受付", "対応中", "要確認"].indexOf(val) !== -1) return "tp-tag-pending";
+    if (["範囲内"].indexOf(val) !== -1) return "tp-tag-approved";
+    return "tp-tag-neutral";
+  }
+
+  function renderSidebar() {
+    var el = document.getElementById("tp-sidebar");
+    var items = [{ key: "dashboard", label: "ダッシュボード", icon: "📊" }].concat(
+      REGISTERS.map(function(r) { return { key: r.key, label: r.label, icon: r.icon }; })
+    );
+    var html = "";
+    html += '<div class="tp-sidebar-header">';
+    html += '<div class="tp-sidebar-title brand-font">Team P<br/>帳票管理システム</div>';
+    html += '<div class="tp-sidebar-sub">一般社団法人 Team P</div>';
+    html += '</div>';
+
+    items.forEach(function(it) {
+      var active = state.activeTab === it.key ? " active" : "";
+      var badge = "";
+      var reg = REGISTERS.filter(function(r){ return r.key === it.key; })[0];
+      if (reg && state.loaded[reg.key]) {
+        badge = '<span class="tp-badge">' + state.data[reg.key].length + '</span>';
+      }
+      html += '<button class="tp-nav-btn' + active + '" data-tab="' + it.key + '">' +
+        '<span>' + it.icon + '</span><span>' + it.label + '</span>' + badge + '</button>';
+    });
+
+    html += '<div class="tp-sidebar-footer">' +
+      '<div class="tp-p-dots"><span class="tp-p-dot"></span><span class="tp-p-dot"></span><span class="tp-p-dot"></span><span class="tp-p-dot"></span><span class="tp-p-dot"></span><span class="tp-p-dot"></span></div>' +
+      'Passion / Promise / Progress<br/>Power / People / Place' +
+      '<div style="margin-top:10px;"><button id="tp-logout-btn" style="background:transparent;border:1px solid rgba(255,255,255,0.3);color:#D7DCE8;font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer;">ログアウト</button></div>' +
+      '</div>';
+
+    el.innerHTML = html;
+
+    el.querySelectorAll(".tp-nav-btn").forEach(function(btn) {
+      btn.addEventListener("click", function() {
+        state.activeTab = btn.getAttribute("data-tab");
+        render();
+      });
+    });
+
+    var logoutBtn = document.getElementById("tp-logout-btn");
+    if (logoutBtn) {
+      logoutBtn.addEventListener("click", function() {
+        Object.keys(unsubscribers).forEach(function(k) { if (unsubscribers[k]) unsubscribers[k](); });
+        auth.signOut();
+      });
+    }
+  }
+
+  function renderDashboard() {
+    var main = document.getElementById("tp-main");
+    var totalItems = REGISTERS.reduce(function(s, r) { return s + state.data[r.key].length; }, 0);
+
+    var html = "";
+    html += '<div class="tp-hero-strip">';
+    html += '<div><h2 class="brand-font">地域をつなぐ、記録を残す。</h2>';
+    html += '<p>役員報酬・固定資産・印章使用・利益相反・個人情報保護の各規程に基づく帳票を、この画面から一括で入力・確認できます。旅費交通費はpkeihiseisan（経費精算アプリ）で管理します。</p></div>';
+    html += '<div class="tp-hero-dots">' +
+      ['P','P','P','P','P','P'].map(function(){ return '<span class="tp-hero-p">P</span>'; }).join('') +
+      '</div>';
+    html += '</div>';
+
+    html += '<div class="tp-kpi-grid">';
+    REGISTERS.forEach(function(r) {
+      var items = state.data[r.key];
+      var statusField = r.fields.filter(function(f){ return f.statusField; })[0];
+      var pendingCount = 0;
+      if (statusField) {
+        items.forEach(function(it) {
+          var v = it[statusField.name];
+          if (["未承認", "審議中", "受付", "対応中", "要確認"].indexOf(v) !== -1) pendingCount++;
+        });
+      }
+      html += '<div class="tp-kpi" data-tab="' + r.key + '">' +
+        '<div class="tp-kpi-num brand-font">' + items.length + '</div>' +
+        '<div class="tp-kpi-label">' + r.label + '</div>' +
+        (statusField ? '<div class="tp-kpi-sub">' + (pendingCount > 0 ? "未対応 " + pendingCount + " 件" : "未対応なし") + '</div>' : '<div class="tp-kpi-sub">&nbsp;</div>') +
+        '</div>';
+    });
+    html += '</div>';
+
+    html += '<div class="tp-card">';
+    html += '<div class="tp-card-title">全体件数</div>';
+    html += '<div style="font-size:13px;color:var(--ink-soft);line-height:1.9;margin-bottom:14px;">登録済みの帳票は合計 <strong style="color:var(--primary);font-size:15px;">' + totalItems + '</strong> 件です。左のメニューから各帳票を選び、入力・編集・削除ができます。</div>';
+    html += '</div>';
+
+    html += '<div class="tp-card">';
+    html += '<div class="tp-card-title">Excel出力</div>';
+    html += '<div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:12px;">出力したい帳票にチェックを入れて出力してください（1つのExcelファイルに、選んだ帳票ごとのシートが作成されます）。</div>';
+    html += '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">';
+    REGISTERS.forEach(function(r) {
+      html += '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">' +
+        '<input type="checkbox" class="tp-export-check" value="' + r.key + '" checked style="width:auto;" />' +
+        '<span>' + r.icon + ' ' + r.label + '（' + state.data[r.key].length + ' 件）</span>' +
+        '</label>';
+    });
+    html += '</div>';
+    html += '<div style="display:flex;gap:10px;flex-wrap:wrap;">';
+    html += '<button class="tp-btn tp-btn-primary" id="tp-export-selected">選択した帳票をExcel出力</button>';
+    html += '<button class="tp-btn tp-btn-ghost" id="tp-export-select-all">すべて選択</button>';
+    html += '<button class="tp-btn tp-btn-ghost" id="tp-export-select-none">選択解除</button>';
+    html += '</div>';
+    html += '</div>';
+
+    main.innerHTML = html;
+
+    main.querySelectorAll(".tp-kpi").forEach(function(el) {
+      el.addEventListener("click", function() {
+        state.activeTab = el.getAttribute("data-tab");
+        render();
+      });
+    });
+
+    var exportSelectedBtn = document.getElementById("tp-export-selected");
+    if (exportSelectedBtn) {
+      exportSelectedBtn.addEventListener("click", function() {
+        var keys = Array.prototype.slice.call(main.querySelectorAll(".tp-export-check:checked")).map(function(cb) { return cb.value; });
+        exportRegistersByKeys(keys);
+      });
+    }
+    var selectAllBtn = document.getElementById("tp-export-select-all");
+    if (selectAllBtn) {
+      selectAllBtn.addEventListener("click", function() {
+        main.querySelectorAll(".tp-export-check").forEach(function(cb) { cb.checked = true; });
+      });
+    }
+    var selectNoneBtn = document.getElementById("tp-export-select-none");
+    if (selectNoneBtn) {
+      selectNoneBtn.addEventListener("click", function() {
+        main.querySelectorAll(".tp-export-check").forEach(function(cb) { cb.checked = false; });
+      });
+    }
+  }
+
+  function buildEmptyItem(reg) {
+    var item = { id: null };
+    reg.fields.forEach(function(f) { item[f.name] = ""; });
+    return item;
+  }
+
+  function renderForm(reg) {
+    var editing = state.editingId[reg.key];
+    var current = editing ? state.data[reg.key].filter(function(i){ return i.id === editing; })[0] : buildEmptyItem(reg);
+    if (!current) current = buildEmptyItem(reg);
+
+    var html = '<div class="tp-card">';
+    html += '<div class="tp-card-title">' + (editing ? "編集：" + reg.title : "新規登録：" + reg.title) + '</div>';
+    html += '<form id="tp-form-' + reg.key + '">';
+    html += '<div class="tp-form-grid">';
+
+    reg.fields.forEach(function(f) {
+      var wideClass = f.wide ? " wide" : "";
+      html += '<div class="tp-field' + wideClass + '">';
+      html += '<label for="tp-f-' + reg.key + '-' + f.name + '">' + f.label + (f.required ? ' <span style="color:var(--danger);">*</span>' : '') + '</label>';
+
+      var val = current[f.name] !== undefined && current[f.name] !== null ? current[f.name] : "";
+
+      if (f.type === "select") {
+        html += '<select id="tp-f-' + reg.key + '-' + f.name + '" data-field="' + f.name + '">';
+        html += '<option value=""' + (val === "" ? " selected" : "") + '>選択してください</option>';
+        f.options.forEach(function(opt) {
+          html += '<option value="' + escapeHtml(opt) + '"' + (val === opt ? " selected" : "") + '>' + escapeHtml(opt) + '</option>';
+        });
+        html += '</select>';
+      } else if (f.type === "textarea") {
+        html += '<textarea id="tp-f-' + reg.key + '-' + f.name + '" data-field="' + f.name + '" placeholder="' + (f.placeholder ? escapeHtml(f.placeholder) : "") + '">' + escapeHtml(val) + '</textarea>';
+      } else {
+        html += '<input type="' + f.type + '" id="tp-f-' + reg.key + '-' + f.name + '" data-field="' + f.name + '" value="' + escapeHtml(val) + '" placeholder="' + (f.placeholder ? escapeHtml(f.placeholder) : "") + '" ' + (f.required ? "required" : "") + ' />';
+      }
+      html += '</div>';
+    });
+
+    html += '</div>';
+    html += '<div class="tp-form-actions">';
+    html += '<button type="submit" class="tp-btn tp-btn-primary">' + (editing ? "更新する" : "登録する") + '</button>';
+    if (editing) {
+      html += '<button type="button" class="tp-btn tp-btn-ghost" id="tp-cancel-edit-' + reg.key + '">キャンセル</button>';
+    }
+    html += '</div>';
+    html += '</form>';
+    html += '</div>';
+    return html;
+  }
+
+  function renderTable(reg) {
+    var items = state.data[reg.key].slice().sort(function(a, b) {
+      var da = a.date || a.acquiredDate || "";
+      var db = b.date || b.acquiredDate || "";
+      return db.localeCompare(da);
+    });
+
+    var html = '<div class="tp-card">';
+    html += '<div class="tp-card-title">登録済み一覧（' + items.length + ' 件）</div>';
+
+    if (items.length === 0) {
+      html += '<div class="tp-empty">まだ登録がありません。上のフォームから最初の記録を登録してください。</div>';
+    } else {
+      html += '<div class="tp-table-wrap"><table class="tp-table"><thead><tr>';
+      reg.columns.forEach(function(c) {
+        html += '<th>' + columnLabel(reg, c) + '</th>';
+      });
+      html += '<th></th></tr></thead><tbody>';
+
+      items.forEach(function(item) {
+        html += '<tr>';
+        reg.columns.forEach(function(c) {
+          var v;
+          if (c === "total" && reg.computeTotal) {
+            v = fmtNumber(reg.computeTotal(item)) + " 円";
+          } else {
+            var field = reg.fields.filter(function(f){ return f.name === c; })[0];
+            var raw = item[c];
+            if (field && field.type === "number") {
+              v = raw ? fmtNumber(raw) + " 円" : "";
+            } else {
+              v = raw || "";
+            }
+            if (field && field.statusField && raw) {
+              v = '<span class="tp-tag ' + tagClassForStatus(raw) + '">' + escapeHtml(raw) + '</span>';
+              html += '<td>' + v + '</td>';
+              return;
+            }
+          }
+          html += '<td>' + escapeHtml(v) + '</td>';
+        });
+        html += '<td style="white-space:nowrap;">' +
+          '<button class="tp-btn-edit-text" data-edit="' + item.id + '">編集</button>' +
+          '<button class="tp-btn-danger-text" data-del="' + item.id + '">削除</button>' +
+          '</td>';
+        html += '</tr>';
+      });
+
+      html += '</tbody></table></div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderRegisterPage(reg) {
+    var main = document.getElementById("tp-main");
+    var html = "";
+    html += '<div class="tp-main-header">';
+    html += '<div><div class="tp-main-title brand-font">' + reg.title + '</div><div class="tp-main-desc">' + reg.desc + '</div></div>';
+    html += '<div style="display:flex;align-items:center;gap:10px;">';
+    html += '<button class="tp-btn tp-btn-ghost" id="tp-export-' + reg.key + '">Excelに出力</button>';
+    html += '<div class="tp-status-pill">' + (state.storageOk ? "リアルタイム同期 ON" : "同期エラーが発生しています") + '</div>';
+    html += '</div>';
+    html += '</div>';
+
+    html += renderForm(reg);
+    html += renderTable(reg);
+
+    main.innerHTML = html;
+
+    var exportBtn = document.getElementById("tp-export-" + reg.key);
+    if (exportBtn) {
+      exportBtn.addEventListener("click", function() { exportRegisterExcel(reg); });
+    }
+
+    var formEl = document.getElementById("tp-form-" + reg.key);
+    formEl.addEventListener("submit", function(e) {
+      e.preventDefault();
+      handleSubmit(reg);
+    });
+
+    var cancelBtn = document.getElementById("tp-cancel-edit-" + reg.key);
+    if (cancelBtn) {
+      cancelBtn.addEventListener("click", function() {
+        state.editingId[reg.key] = null;
+        render();
+      });
+    }
+
+    main.querySelectorAll("[data-edit]").forEach(function(btn) {
+      btn.addEventListener("click", function() {
+        state.editingId[reg.key] = btn.getAttribute("data-edit");
+        render();
+        var card = main.querySelector(".tp-card");
+        if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+
+    main.querySelectorAll("[data-del]").forEach(function(btn) {
+      btn.addEventListener("click", async function() {
+        var id = btn.getAttribute("data-del");
+        if (!confirm("この記録を削除しますか？この操作は取り消せません。")) return;
+        if (state.editingId[reg.key] === id) state.editingId[reg.key] = null;
+        try {
+          await collectionRef(reg.key).doc(id).delete();
+        } catch (e) {
+          state.storageOk = false;
+          alert("削除に失敗しました。通信環境をご確認のうえ、もう一度お試しください。");
+        }
+        // 一覧はonSnapshotのリアルタイム更新で自動的に反映されます
+      });
+    });
+  }
+
+  async function handleSubmit(reg) {
+    var main = document.getElementById("tp-main");
+    var values = {};
+    reg.fields.forEach(function(f) {
+      var el = main.querySelector('[data-field="' + f.name + '"]');
+      values[f.name] = el ? el.value : "";
+    });
+
+    var missing = reg.fields.filter(function(f) { return f.required && !values[f.name]; });
+    if (missing.length > 0) {
+      alert("必須項目を入力してください：" + missing.map(function(f){return f.label;}).join("、"));
+      return;
+    }
+
+    var editing = state.editingId[reg.key];
+    var submitBtn = main.querySelector('#tp-form-' + reg.key + ' button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      if (editing) {
+        values.updatedAt = new Date().toISOString();
+        values.updatedBy = (auth.currentUser && auth.currentUser.email) || "";
+        await collectionRef(reg.key).doc(editing).set(values, { merge: true });
+        state.editingId[reg.key] = null;
+      } else {
+        values.createdAt = new Date().toISOString();
+        values.createdBy = (auth.currentUser && auth.currentUser.email) || "";
+        await collectionRef(reg.key).add(values);
+      }
+      // 一覧・フォームのリセットはonSnapshotのリアルタイム更新で自動的に反映されます
+    } catch (e) {
+      state.storageOk = false;
+      alert("保存に失敗しました。通信環境をご確認のうえ、もう一度お試しください。");
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  }
+
+  function render() {
+    renderSidebar();
+    if (state.activeTab === "dashboard") {
+      renderDashboard();
+    } else {
+      var reg = REGISTERS.filter(function(r) { return r.key === state.activeTab; })[0];
+      if (reg) renderRegisterPage(reg);
+    }
+  }
+
+  (function init() {
+    auth.onAuthStateChanged(function(user) {
+      if (user) {
+        document.getElementById("tp-login-screen").style.display = "none";
+        document.getElementById("tp-ledger-root").style.display = "flex";
+        attachRealtimeListeners();
+        render();
+      } else {
+        document.getElementById("tp-login-screen").style.display = "flex";
+        document.getElementById("tp-ledger-root").style.display = "none";
+      }
+    });
+
+    document.getElementById("tp-login-form").addEventListener("submit", function(e) {
+      e.preventDefault();
+      var email = document.getElementById("tp-login-email").value.trim();
+      var pass = document.getElementById("tp-login-password").value;
+      var errEl = document.getElementById("tp-login-error");
+      errEl.textContent = "";
+      auth.signInWithEmailAndPassword(email, pass).catch(function(err) {
+        errEl.textContent = "ログインできませんでした。メールアドレスとパスワードをご確認ください。";
+      });
+    });
+  })();
+})();
+</script>
+</body>
+</html>
