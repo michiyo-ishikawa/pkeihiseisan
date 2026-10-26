@@ -891,6 +891,21 @@ function receiptPageCss(){
   return `@page{size:A4;margin:${v}mm ${h}mm}`
        + `.doc.receipt{max-width:${210 - h*2}mm}`;
 }
+/* 請求書の印刷用CSS（v4.1）。
+   既定の@page余白(上下18mm)だとiPhone(iOS Safari)で注記の末尾1行が2ページ目に
+   はみ出したため、上下余白を10mmに縮め、見出しや各ブロックの間隔も詰めて
+   1ページに収める。下に十分な余りを残す設計（ページ高さには依存しない）。 */
+function invoicePageCss(){
+  return "@page{size:A4;margin:10mm 15mm}"
+    + "#printInvoice{line-height:1.55}"
+    + "#printInvoice .doctitle{margin:0 0 5mm}"
+    + "#printInvoice .meta{margin-bottom:4mm}"
+    + "#printInvoice .amount-box{margin:3mm 0}"
+    + "#printInvoice table.items{margin:3mm 0}"
+    + "#printInvoice .bank{margin-top:3mm}"
+    + "#printInvoice .note{margin-top:2mm}"
+    + "#printInvoice{page-break-inside:avoid;break-inside:avoid}";
+}
 const RECEIPT_STATUS_LABEL = {issued:"発行済", void:"取消"};
 const RECEIPT_STATUS_BADGE = {issued:"bd-issued", void:"bd-cancel"};
 
@@ -2599,7 +2614,7 @@ function doPrint(which){
   el.style.display = "block";
   const html = el.outerHTML;
   el.style.display = prev || "none";
-  printViaIframe(html, which==="invoice" ? null : receiptPageCss());
+  printViaIframe(html, which==="invoice" ? invoicePageCss() : receiptPageCss());
 }
 function printInvoiceDoc(docId){
   const s=SALES.find(x=>x._id===docId); if(!s) return;
