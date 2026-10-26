@@ -891,19 +891,22 @@ function receiptPageCss(){
   return `@page{size:A4;margin:${v}mm ${h}mm}`
        + `.doc.receipt{max-width:${210 - h*2}mm}`;
 }
-/* 請求書の印刷用CSS（v4.1）。
+/* 請求書の印刷用CSS（v4.2）。
    既定の@page余白(上下18mm)だとiPhone(iOS Safari)で注記の末尾1行が2ページ目に
-   はみ出したため、上下余白を10mmに縮め、見出しや各ブロックの間隔も詰めて
-   1ページに収める。下に十分な余りを残す設計（ページ高さには依存しない）。 */
+   はみ出したため、上下余白を10mmに縮めた（v4.1）。v4.1では下が空きすぎたため、
+   v4.2で本文全体をpadding-topで下げ、間隔も少し戻して縦のバランスを整えた。
+   iOS Safariは印刷ヘッダー／フッター分の領域を下側に確保するため、見た目で
+   完全に上下中央にすると2ページ目にはみ出す。下に約15mmの安全余白を残している。
+   padding-topを増やす場合は必ずiPhone実機の印刷プレビューで確認すること。 */
 function invoicePageCss(){
   return "@page{size:A4;margin:10mm 15mm}"
-    + "#printInvoice{line-height:1.55}"
-    + "#printInvoice .doctitle{margin:0 0 5mm}"
-    + "#printInvoice .meta{margin-bottom:4mm}"
-    + "#printInvoice .amount-box{margin:3mm 0}"
-    + "#printInvoice table.items{margin:3mm 0}"
-    + "#printInvoice .bank{margin-top:3mm}"
-    + "#printInvoice .note{margin-top:2mm}"
+    + "#printInvoice{line-height:1.65;padding-top:12mm}"
+    + "#printInvoice .doctitle{margin:0 0 7mm}"
+    + "#printInvoice .meta{margin-bottom:5mm}"
+    + "#printInvoice .amount-box{margin:4mm 0}"
+    + "#printInvoice table.items{margin:4mm 0}"
+    + "#printInvoice .bank{margin-top:4mm}"
+    + "#printInvoice .note{margin-top:3mm}"
     + "#printInvoice{page-break-inside:avoid;break-inside:avoid}";
 }
 const RECEIPT_STATUS_LABEL = {issued:"発行済", void:"取消"};
