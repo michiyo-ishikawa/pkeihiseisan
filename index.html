@@ -245,6 +245,21 @@ table.data tr:hover td{background:#fafbf8}
 .ocr-side{flex:1 1 260px;min-width:0}
 .ocr-chip{margin:2px 6px 2px 0;padding:4px 10px;border:1px solid var(--ai);border-radius:14px;background:#fff;color:var(--ai);font-size:12.5px;cursor:pointer}
 .ocr-chip:hover{background:var(--ai);color:#fff}
+/* 取引先の検索付き選択欄（v4.1） */
+.cbx{position:relative}
+.cbx-input{padding-right:30px}
+.cbx-clear{position:absolute;right:4px;top:4px;width:26px;height:26px;border:none;background:none;color:var(--ink-soft);font-size:16px;line-height:1;display:none}
+.cbx.has-val .cbx-clear{display:block}
+.cbx-list{display:none;position:absolute;left:0;right:0;top:100%;margin-top:2px;z-index:40;background:#fff;border:1px solid var(--ai);border-radius:6px;max-height:300px;overflow-y:auto;box-shadow:0 6px 18px rgba(23,50,74,.18);-webkit-overflow-scrolling:touch}
+.cbx-list.open{display:block}
+.cbx-head{font-size:11px;font-weight:600;color:var(--ink-soft);background:var(--sand);padding:4px 10px;position:sticky;top:0}
+.cbx-item{padding:8px 10px;cursor:pointer;border-bottom:1px solid #f0f2f4;font-size:13.5px;line-height:1.35}
+.cbx-item .sub{font-size:11px;color:var(--ink-soft)}
+.cbx-item.hl,.cbx-item:hover{background:#e8eef6}
+.cbx-item.sel{font-weight:700}
+.cbx-item.free{color:var(--ai);font-size:12.5px}
+.cbx-empty{padding:10px;font-size:12.5px;color:var(--ink-soft)}
+.cbx-item mark{background:#fff3b0;color:inherit;padding:0}
 </style>
 </head>
 <body>
@@ -434,6 +449,7 @@ table.data tr:hover td{background:#fafbf8}
       <div><label class="req">但し書き（全員共通）</label><input id="rbProviso" list="provisoList" placeholder="例：セミナー参加費として"></div>
       <div>
         <label class="req">宛先（取引先マスタ・複数選択可）</label>
+        <input id="rbPartySearch" placeholder="名称・カナ・ID・T番号で絞り込み" oninput="filterBulkPartyList()" style="margin-bottom:6px">
         <div id="rbPartyList" style="max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:8px 10px"></div>
         <p class="hint" style="margin-top:4px"><span id="rbPartyCount">0</span>件選択中</p>
       </div>
@@ -509,7 +525,7 @@ table.data tr:hover td{background:#fafbf8}
   <div class="card">
     <h2>取引先一覧</h2>
     <div class="filterbar">
-      <input id="fPartyText" placeholder="名称・カナ・IDで検索" oninput="renderPartyList()">
+      <input id="fPartyText" placeholder="名称・カナ・ID・T番号で検索" oninput="renderPartyList()">
       <button class="btn btn-p btn-sm" style="flex:none" onclick="exportPartiesExcel()">取引先一覧をExcel出力</button>
     </div>
     <div class="tbl-wrap"><table class="data"><thead><tr>
@@ -1115,18 +1131,32 @@ function fillPartySelects(){
   const opt = (list, allowFree) => `<option value="">— 選択してください —</option>`
     + list.map(p=>`<option value="${p.partyId}">${p.partyId}　${esc(p.name)}</option>`).join("")
     + (allowFree ? `<option value="__FREE__">— 自由入力（マスタ未登録の支払先）—</option>` : "");
-  document.getElementById("eParty").innerHTML = opt(vendors, true);
-  document.getElementById("emParty").innerHTML = opt(PARTIES, true);
-  document.getElementById("sParty").innerHTML = opt(customers, false);
-  document.getElementById("rParty").innerHTML = opt(customers, false);
+  // 取引先データの更新で選択欄を作り直しても、入力途中の選択が消えないよう保持する（v4.1）
+  const fill = (id, html)=>{
+    const el = document.getElementById(id);
+    const cur = el.options[el.selectedIndex];
+    const keep = cur ? cur.value : "";
+    el.innerHTML = html;
+    el.selectedIndex = Math.max(0, [...el.options].findIndex(o=>o.value===keep));
+  };
+  fill("eParty", opt(vendors, true));
+  fill("emParty", opt(PARTIES, true));
+  fill("sParty", opt(customers, false));
+  fill("rParty", opt(customers, false));
   fillBulkPartyCheckboxes(customers);
+  if(typeof cbxSync==="function") cbxSync();
 }
 function fillBulkPartyCheckboxes(customers){
   customers = customers || PARTIES.filter(p=>p.isActive!==false && (p.type||[]).includes("customer"));
   const box = document.getElementById("rbPartyList");
   if(!box) return;
+  const kept = {};
+  box.querySelectorAll(".rbParty:checked").forEach(cb=>{
+    const q = box.querySelector(`.rbPartyQty[data-party="${cb.value}"]`);
+    kept[cb.value] = q ? q.value : 1;
+  });
   box.innerHTML = customers.map(p=>
-    `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;font-weight:400;font-size:13px">
+    `<label class="rbPartyRow" data-hay="${esc(partyHaystack(p))}" style="display:flex;align-items:center;gap:8px;padding:3px 0;font-weight:400;font-size:13px">
       <input type="checkbox" class="rbParty" value="${p.partyId}" onchange="onBulkPartyToggle(this)" style="width:auto">
       <span style="flex:1">${p.partyId}　${esc(p.name)}</span>
       <span style="display:flex;align-items:center;gap:3px;color:var(--ink-soft)">枚数
@@ -1134,7 +1164,24 @@ function fillBulkPartyCheckboxes(customers){
           oninput="updateBulkPartyCount()" style="width:52px;padding:2px 4px">
       </span>
     </label>`).join("") || `<div class="hint">取引先マスタに宛先候補（入金先区分）がありません。取引先タブから登録してください。</div>`;
+  Object.entries(kept).forEach(([pid, qty])=>{
+    const cb = box.querySelector(`.rbParty[value="${pid}"]`);
+    if(!cb) return;
+    cb.checked = true;
+    const q = box.querySelector(`.rbPartyQty[data-party="${pid}"]`);
+    if(q){ q.disabled = false; q.value = qty; }
+  });
+  filterBulkPartyList();
   updateBulkPartyCount();
+}
+/* まとめて発行の宛先一覧を絞り込む。チェック済みの宛先は常に表示したままにする（v4.1） */
+function filterBulkPartyList(){
+  const inp = document.getElementById("rbPartySearch");
+  const q = cbxNorm(inp ? inp.value : "");
+  document.querySelectorAll("#rbPartyList .rbPartyRow").forEach(row=>{
+    const checked = row.querySelector(".rbParty").checked;
+    row.style.display = (!q || checked || row.dataset.hay.includes(q)) ? "flex" : "none";
+  });
 }
 function onBulkPartyToggle(cb){
   const qty = document.querySelector(`.rbPartyQty[data-party="${cb.value}"]`);
@@ -1798,6 +1845,7 @@ function openEditExpense(docId){
   document.getElementById("emParty").value = e.partyId || "__FREE__";
   document.getElementById("emVendorFree").value = e.partyId ? "" : (e.vendor||"");
   toggleVendorFree("emParty","emVendorFree");
+  cbxSync();
   document.getElementById("emProject").value = e.project||"";
   const emExRadio = document.querySelector('input[name="emAmountMode"][value="ex"]');
   if(emExRadio) emExRadio.checked = true;
@@ -2201,6 +2249,7 @@ async function saveInvoice(status){
 function resetInvoiceForm(){
   ["sEditingId","sTitle","sProject","sDueDate"].forEach(id=>document.getElementById(id).value="");
   document.getElementById("sParty").value="";
+  cbxSync();
   document.getElementById("sIssueDate").value=todayStr();
   document.getElementById("itemRows").innerHTML="";
   addItemRow();
@@ -2212,6 +2261,7 @@ function editInvoice(docId){
   if(s.status==="paid"){ showMsg("入金済の請求書は編集できません（消込を取り消してから編集してください）"); return; }
   document.getElementById("sEditingId").value=docId;
   document.getElementById("sParty").value=s.partyId||"";
+  cbxSync();
   document.getElementById("sIssueDate").value=s.issueDate||"";
   document.getElementById("sDueDate").value=s.dueDate||"";
   document.getElementById("sTitle").value=s.title||"";
@@ -2488,6 +2538,7 @@ function startReissueForm(r){
   document.getElementById("reissueBanner").style.display = "block";
   document.getElementById("reissueOfNo").textContent = r.receiptId;
   document.getElementById("rParty").value = r.partyId||"";
+  cbxSync();
   document.getElementById("rDate").value = todayStr();
   document.getElementById("rAmount").value = r.amount||"";
   document.getElementById("rTaxRate").value = r.taxRate===0.08?"0.08":r.taxRate===0?"0":"0.10";
@@ -2685,7 +2736,8 @@ function partyStats(pid){
 function renderPartyList(){
   const q=(document.getElementById("fPartyText").value||"").trim().toLowerCase();
   let rows=PARTIES.filter(p=>p.isActive!==false);
-  if(q) rows=rows.filter(p=>((p.name||"")+(p.kana||"")+(p.partyId||"")).toLowerCase().includes(q));
+  const nq = cbxNorm(q);
+  if(nq) rows=rows.filter(p=>partyHaystack(p).includes(nq));
   document.getElementById("partyTbody").innerHTML = rows.map(p=>{
     const st=partyStats(p.partyId);
     const types=(p.type||[]).map(t=>t==="customer"?"入金先":"支払先").join("・");
@@ -3484,9 +3536,13 @@ function ocrClearMarks(){
 function ocrMark(ids, level, note, tally){
   (Array.isArray(ids)?ids:[ids]).forEach(id=>{
     const el = document.getElementById(id); if(!el) return;
-    el.classList.remove("ocr-ok","ocr-warn","ocr-ng");
-    if(level){ el.classList.add("ocr-"+level); }
-    if(note) el.title = note; else el.removeAttribute("title");
+    // 取引先は検索付きの入力欄が表示されているので、色はそちらに付ける（v4.1）
+    const shown = (el.parentNode && el.parentNode.classList.contains("cbx")) ? el.parentNode.querySelector(".cbx-input") : null;
+    [el, shown].filter(Boolean).forEach(x=>{
+      x.classList.remove("ocr-ok","ocr-warn","ocr-ng");
+      if(level){ x.classList.add("ocr-"+level); }
+      if(note) x.title = note; else x.removeAttribute("title");
+    });
   });
   if(level && tally) tally[level]++;
 }
@@ -3517,6 +3573,7 @@ function ocrLoadToForm(id){
   else if(r.vendor.name){ sel.value = "__FREE__"; free.value = r.vendor.name; }
   else { sel.value = ""; }
   free.style.display = sel.value==="__FREE__" ? "block" : "none";
+  cbxSync();
   ocrMark(["eParty","eVendorFree"], r.vendor.level, r.vendor.via?("判定根拠："+r.vendor.via):"支払先を読み取れませんでした", t);
   // 科目・品目・事業名
   const kOk = r.kamoku.value && [...$("eKamoku").options].some(o=>o.value===r.kamoku.value);
@@ -3652,6 +3709,170 @@ function renderAll(){
   renderPettyCash();
 }
 document.querySelectorAll(".modal-bg").forEach(m=>m.addEventListener("click", e=>{ if(e.target===m) m.classList.remove("open"); }));
+/* ===== 取引先の検索付き選択欄（v4.1） =====
+   元の <select>（eParty / emParty / sParty / rParty）は画面から隠したまま残し、
+   その上に「文字を打つと候補が絞り込まれる入力欄」を重ねる。
+   保存・編集・OCRなど既存の処理は従来どおり select.value を読み書きするだけでよい。
+   select.value への代入は enhancePartySelect() が検知して入力欄の表示に反映する。
+   検索対象：取引先ID・名称（法人格を除いた形でも可）・カナ（ひらがなでも可）・T番号。 */
+function cbxNorm(s){
+  return String(s||"").normalize("NFKC").toLowerCase()
+    .replace(/[\s　・\-‐－ー_.,，、。()（）]/g, m=> m==="ー" ? "ー" : "")
+    .replace(/[ぁ-ゖ]/g, c=>String.fromCharCode(c.charCodeAt(0)+0x60));
+}
+function partyHaystack(p){
+  if(!p) return "";
+  const name = p.name||"";
+  const bare = name.replace(/株式会社|有限会社|合同会社|一般社団法人|一般財団法人|公益社団法人|公益財団法人|医療法人|社会福祉法人|国立大学法人|\(株\)|（株）|㈱|\(有\)|（有）|㈲/g,"");
+  return cbxNorm([p.partyId, name, bare, p.kana, p.invoiceNo].join("|"));
+}
+/* 最近使った取引先（新しい順）。vendor=経費の支払先、customer=請求書・領収書の宛先 */
+function recentPartyIds(kind, limit){
+  const rows = [];
+  if(kind==="vendor"){
+    EXPENSES.forEach(e=>{ if(e.partyId) rows.push([e.createdAt||e.date||"", e.partyId]); });
+  }else{
+    SALES.forEach(s=>{ if(s.partyId) rows.push([s.createdAt||s.issueDate||"", s.partyId]); });
+    RECEIPTS.forEach(r=>{ if(r.partyId) rows.push([r.createdAt||r.issueDate||"", r.partyId]); });
+  }
+  rows.sort((a,b)=>String(b[0]).localeCompare(String(a[0])));
+  const out = [];
+  for(const [,pid] of rows){ if(!out.includes(pid)) out.push(pid); if(out.length>=limit) break; }
+  return out;
+}
+const CBX = {};
+/* select.value をコードから変えた後に、検索欄の表示を合わせる（念のための明示呼び出し） */
+function cbxSync(){ Object.values(CBX).forEach(c=>c.sync()); }
+function enhancePartySelect(selId, kind){
+  const sel = document.getElementById(selId);
+  if(!sel || CBX[selId]) return;
+  const wrap = document.createElement("div"); wrap.className = "cbx";
+  const input = document.createElement("input");
+  input.type = "text"; input.className = "cbx-input"; input.autocomplete = "off";
+  input.setAttribute("autocorrect","off"); input.setAttribute("autocapitalize","off"); input.spellcheck = false;
+  input.placeholder = "名称・カナ・ID・T番号で検索して選択";
+  const clearBtn = document.createElement("button");
+  clearBtn.type = "button"; clearBtn.className = "cbx-clear"; clearBtn.textContent = "×"; clearBtn.title = "選択を解除";
+  const list = document.createElement("div"); list.className = "cbx-list";
+  sel.parentNode.insertBefore(wrap, sel);
+  wrap.appendChild(input); wrap.appendChild(clearBtn); wrap.appendChild(list); wrap.appendChild(sel);
+  sel.style.display = "none";
+
+  const st = { items:[], hl:-1, closeTimer:null };
+  // select本来のvalueを直接使わず、selectedIndex経由で読み書きする（ブラウザ差の影響を受けないため）
+  const nativeValue = {
+    get(){ const o = this.options[this.selectedIndex]; return o ? o.value : ""; },
+    set(v){ const i = [...this.options].findIndex(o=>o.value===String(v??"")); this.selectedIndex = i; }
+  };
+  const labelOf = v=>{
+    if(!v) return "";
+    if(v==="__FREE__") return "（自由入力）マスタ未登録の支払先";
+    const p = partyById(v);
+    if(p) return `${p.name}（${p.partyId}）`;
+    const o = [...sel.options].find(o=>o.value===v);
+    return o ? o.textContent : "";
+  };
+  const sync = ()=>{
+    const v = nativeValue.get.call(sel);
+    input.value = labelOf(v);
+    wrap.classList.toggle("has-val", !!v);
+  };
+  // 既存のコードが select.value に代入したら、入力欄の表示も追従させる
+  Object.defineProperty(sel, "value", {
+    configurable:true,
+    get(){ return nativeValue.get.call(this); },
+    set(v){ nativeValue.set.call(this, v); sync(); }
+  });
+  const pick = v=>{
+    const changed = nativeValue.get.call(sel) !== v;
+    nativeValue.set.call(sel, v); sync();
+    close();
+    if(changed) sel.dispatchEvent(new Event("change", {bubbles:true}));
+    if(v!=="__FREE__") input.blur();
+  };
+  const hiText = (text, q)=>{
+    const t = esc(text);
+    if(!q) return t;
+    const i = cbxNorm(text).indexOf(q);
+    // 正規化で文字数が変わらない場合だけ一致箇所を強調する
+    if(i<0 || cbxNorm(text).length!==text.length) return t;
+    return esc(text.slice(0,i)) + "<mark>" + esc(text.slice(i,i+q.length)) + "</mark>" + esc(text.slice(i+q.length));
+  };
+  const itemHtml = (v, q, idx)=>{
+    if(v==="__FREE__") return `<div class="cbx-item free" data-i="${idx}">＋ マスタ未登録の支払先を自由入力する</div>`;
+    const p = partyById(v); if(!p) return "";
+    const cur = nativeValue.get.call(sel)===v;
+    const sub = [p.partyId, p.kana, p.invoiceNo].filter(Boolean).map(esc).join("　");
+    return `<div class="cbx-item${cur?" sel":""}" data-i="${idx}">${hiText(p.name||"", q)}<div class="sub">${sub}</div></div>`;
+  };
+  const render = ()=>{
+    const q = cbxNorm(input.value);
+    const values = [...sel.options].map(o=>o.value).filter(v=>v && v!=="__FREE__");
+    const hasFree = [...sel.options].some(o=>o.value==="__FREE__");
+    let html = "", items = [];
+    const add = v=>{ html += itemHtml(v, q, items.length); items.push(v); };
+    if(!q){
+      const recent = recentPartyIds(kind, 6).filter(v=>values.includes(v));
+      if(recent.length){ html += `<div class="cbx-head">最近使った取引先</div>`; recent.forEach(add); }
+      html += `<div class="cbx-head">すべての取引先（${values.length}件）</div>`;
+      values.forEach(add);
+    }else{
+      const hits = values.map(v=>{
+        const p = partyById(v); const hay = partyHaystack(p);
+        const pos = hay.indexOf(q);
+        return { v, pos, nameStart: cbxNorm(p&&p.name).startsWith(q) };
+      }).filter(x=>x.pos>=0)
+        .sort((a,b)=> (b.nameStart-a.nameStart) || (a.pos-b.pos));
+      html += `<div class="cbx-head">「${esc(input.value.trim())}」に一致：${hits.length}件</div>`;
+      hits.forEach(x=>add(x.v));
+      if(!hits.length) html += `<div class="cbx-empty">該当する取引先がありません。${hasFree?"下の「自由入力」を使うか、":""}取引先タブで登録してください。</div>`;
+    }
+    if(hasFree) add("__FREE__");
+    st.items = items;
+    st.hl = q && items.length ? 0 : -1;
+    list.innerHTML = html;
+    markHl();
+  };
+  const markHl = ()=>{
+    list.querySelectorAll(".cbx-item").forEach(el=>el.classList.toggle("hl", Number(el.dataset.i)===st.hl));
+    const el = list.querySelector(`.cbx-item[data-i="${st.hl}"]`);
+    if(el) el.scrollIntoView({block:"nearest"});
+  };
+  const open = ()=>{ clearTimeout(st.closeTimer); render(); list.classList.add("open"); };
+  const close = ()=>{ list.classList.remove("open"); st.hl = -1; };
+
+  input.addEventListener("focus", ()=>{ input.select(); open(); });
+  input.addEventListener("input", ()=>{ list.classList.add("open"); render(); });
+  input.addEventListener("keydown", e=>{
+    if(e.key==="ArrowDown"){ e.preventDefault(); if(!list.classList.contains("open")) open(); st.hl = Math.min(st.items.length-1, st.hl+1); markHl(); }
+    else if(e.key==="ArrowUp"){ e.preventDefault(); st.hl = Math.max(0, st.hl-1); markHl(); }
+    else if(e.key==="Enter"){ if(list.classList.contains("open") && st.hl>=0){ e.preventDefault(); pick(st.items[st.hl]); } }
+    else if(e.key==="Escape"){ close(); sync(); input.blur(); }
+  });
+  input.addEventListener("blur", ()=>{
+    st.closeTimer = setTimeout(()=>{
+      // 文字を消して離れたら選択を解除、途中まで打って離れたら元の選択に戻す
+      if(!input.value.trim() && nativeValue.get.call(sel)){ pick(""); return; }
+      close(); sync();
+    }, 250);
+  });
+  list.addEventListener("mousedown", e=>e.preventDefault()); // PCでクリック時に入力欄のフォーカスが外れないように
+  list.addEventListener("click", e=>{
+    const el = e.target.closest(".cbx-item"); if(!el) return;
+    pick(st.items[Number(el.dataset.i)]);
+  });
+  clearBtn.addEventListener("click", ()=>{ pick(""); input.focus(); });
+  CBX[selId] = { sync, render };
+  sel.addEventListener("change", sync);
+  sync();
+}
+(function initPartyCombos(){
+  enhancePartySelect("eParty", "vendor");
+  enhancePartySelect("emParty", "vendor");
+  enhancePartySelect("sParty", "customer");
+  enhancePartySelect("rParty", "customer");
+})();
+
 addItemRow();
 </script>
 </body>
