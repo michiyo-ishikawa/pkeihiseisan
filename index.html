@@ -330,7 +330,7 @@ table.data tr:hover td{background:#fafbf8}
     <div class="preview-no">証憑番号（保存時に確定）：<b id="entryPreviewNo">—</b></div>
     <div class="grid g3">
       <div><label class="req">支払日</label><input type="date" id="eDate"></div>
-      <div><label class="req">勘定科目</label><select id="eKamoku"></select></div>
+      <div><label class="req">勘定科目</label><select id="eKamoku" onchange="depositHint('eKamoku','eKamokuHint')"></select><div class="hint" id="eKamokuHint" style="display:none;margin-top:4px;color:var(--ai)">預り金の支払：費用には計上されず、預り金残高から差し引かれます。事業名（例：真庭速祭2026）を必ず入れてください。</div></div>
       <div><label class="req">支払区分</label><select id="ePayType"></select></div>
       <div><label class="req">支払先（取引先マスタ／自由入力）</label><select id="eParty" onchange="toggleVendorFree('eParty','eVendorFree')"></select><input id="eVendorFree" placeholder="支払先名を入力（例：〇〇文具店）" style="display:none;margin-top:6px"></div>
       <div><label>事業名／案件名</label><input id="eProject" list="projectList" placeholder="例：設立準備"></div>
@@ -373,7 +373,7 @@ table.data tr:hover td{background:#fafbf8}
       <div><label class="req">発行日</label><input type="date" id="sIssueDate"></div>
       <div><label>支払期限</label><input type="date" id="sDueDate"></div>
       <div><label class="req">件名</label><input id="sTitle" placeholder="例：地域連携イベント運営業務"></div>
-      <div><label class="req">収益科目</label><select id="sKamoku"></select></div>
+      <div><label class="req">収益科目</label><select id="sKamoku" onchange="depositHint('sKamoku','sKamokuHint')"></select><div class="hint" id="sKamokuHint" style="display:none;margin-top:4px;color:var(--ai)">預り金：収益には計上されず、預り金残高として管理します。事業名（例：真庭速祭2026）を必ず入れてください。税率の扱い（10%／対象外）は税理士にご確認ください。</div></div>
       <div><label>事業名／案件名</label><input id="sProject" list="projectList"></div>
     </div>
     <div style="margin-top:14px"><label>明細</label>
@@ -591,6 +591,14 @@ table.data tr:hover td{background:#fafbf8}
       <select id="fIncomeType" onchange="renderSummary()"><option value="">すべて</option><option value="請求書">請求書のみ</option><option value="領収書">領収書のみ</option></select>
     </div>
     <div class="tbl-wrap"><table class="data"><thead><tr><th>日付</th><th>種別</th><th>番号</th><th>宛先</th><th>件名／但し書き</th><th class="num">金額（税込）</th><th>状態</th></tr></thead><tbody id="incomeAllTbody"></tbody></table></div>
+  </div>
+  <div class="card">
+    <h2>預り金（協賛金の代理受領など・全期間）</h2>
+    <p class="hint" style="margin-bottom:8px">科目「預り金（負債・収益外）」で発行した請求書・領収書の入金と、経費の科目「預り金の支払（運営元等へ）」の支払を、事業名ごとに差し引きしたものです。収益・費用には含まれません（資金繰り表の入出金には含まれます）。年度をまたぐことがあるため、全期間で集計しています。</p>
+    <div class="tbl-wrap"><table class="data"><thead><tr><th>事業名／案件名</th><th class="num">請求額</th><th class="num">うち未入金</th><th class="num">入金済（預り）</th><th class="num">支払済</th><th class="num">預り残高</th></tr></thead><tbody id="depositTbody"></tbody></table></div>
+    <details style="margin-top:8px"><summary class="hint" style="cursor:pointer">明細を見る</summary>
+      <div class="tbl-wrap" style="margin-top:6px"><table class="data"><thead><tr><th>日付</th><th>区分</th><th>番号</th><th>事業名</th><th>相手先</th><th class="num">預り（入金）</th><th class="num">支払</th><th>状態</th></tr></thead><tbody id="depositDetailTbody"></tbody></table></div>
+    </details>
   </div>
   <div class="card"><h2>収益（正味財産増加）</h2><div class="tbl-wrap"><table class="data"><thead><tr><th>収益科目</th><th class="num">税抜</th><th class="num">消費税</th><th class="num">税込</th><th class="num">件数</th></tr></thead><tbody id="revTbody"></tbody></table></div>
   <p class="hint">売上台帳は「発行済」以降の請求書と単独発行領収書を計上（下書き・取消は除外）。</p></div>
@@ -896,9 +904,17 @@ const KAMOKU_EXP = {
   "人件費": ["役員報酬", "給料手当", "法定福利費", "福利厚生費"],
   "経費": ["会議費","接待交際費","旅費交通費","通信費","消耗品費","印刷製本費","広告宣伝費","地代家賃","賃借料","水道光熱費","保険料","修繕費","支払手数料","支払報酬料","業務委託費","諸会費","新聞図書費","研修費","減価償却費","雑費"],
   "税金": ["租税公課"],
-  "固定資産": ["器具備品", "ソフトウェア"]
+  "固定資産": ["器具備品", "ソフトウェア"],
+  "預り金（費用外）": ["預り金の支払（運営元等へ）"]
 };
-const KAMOKU_REV = ["受取会費（正会員）","受取会費（賛助会員）","事業収益（受託収益）","事業収益（参加費収益）","受取寄付金・協賛金","受取利息・雑収益","基金受入（純資産・収益外）"];
+const KAMOKU_REV = ["受取会費（正会員）","受取会費（賛助会員）","事業収益（受託収益）","事業収益（参加費収益）","受取寄付金・協賛金","受取利息・雑収益","基金受入（純資産・収益外）","預り金（負債・収益外）"];
+/* 預り金（v4.3）：協賛金の代理受領など、受け取ってそのまま相手に支払うお金。
+   収益にも費用にも計上せず、資金繰り（実際のお金の出入り）と預り金残高にだけ反映する。 */
+const DEPOSIT_REV = "預り金（負債・収益外）";
+const DEPOSIT_EXP = "預り金の支払（運営元等へ）";
+function isDepositKamoku(k){ return String(k||"").startsWith("預り金"); }
+/* 費用として集計する経費（預り金の支払を除く） */
+function costExpenses(list){ return (list||[]).filter(e=>!isDepositKamoku(e.kamoku)); }
 const PAY_TYPES = ["立替（代表理事・土井）","立替（理事・越宗）","立替（理事・安井）","立替（事務局・石川）","法人口座","法人カード"];
 const PAY_LABELS = {"立替（代表理事・土井）":"代表理事・土井","立替（理事・越宗）":"理事・越宗","立替（理事・安井）":"理事・安井","立替（事務局・石川）":"事務局・石川","法人口座":"法人口座","法人カード":"法人カード"};
 const isTatekaeType = t => (t||"").includes("立替");
@@ -1816,6 +1832,8 @@ async function saveExpense(){
   const amountEntered = amountMode === "in" ? amountIn : amountEx;
   const desc = document.getElementById("eDesc").value.trim();
   if(!date || !kamoku || !payType || !partySel || (isFreeVendor ? !vendorFree : !partyId) || !amountEntered || !desc){ showMsg("必須項目（*）を入力してください"); return; }
+  if(isDepositKamoku(kamoku) && !document.getElementById("eProject").value.trim()
+     && !confirm("預り金の支払に事業名／案件名が入っていません。\n事業名がないと、事業ごとの預り金残高に正しく集計できません。\nこのまま保存しますか？")) return;
   // 二重登録チェック（同じ日付・金額・支払先の経費がすでにあれば確認する）
   const dup = EXPENSES.find(x=> x.date===date && Number(x.amountIn)===Number(amountIn) &&
     (isFreeVendor ? (!x.partyId && (x.vendor||"")===vendorFree) : x.partyId===partyId));
@@ -2239,6 +2257,8 @@ async function saveInvoice(status){
   const items=readItems();
   if(!partyId||!issueDate||!title){ showMsg("必須項目（*）を入力してください"); return; }
   if(!items.length){ showMsg("明細を1行以上入力してください"); return; }
+  if(isDepositKamoku(document.getElementById("sKamoku").value) && !document.getElementById("sProject").value.trim()
+     && !confirm("預り金の請求書に事業名／案件名が入っていません。\n事業名がないと、事業ごとの預り金残高に正しく集計できません。\nこのまま保存しますか？")) return;
   const t = invoiceTotals(items);
   const fy = fiscalYearOf(issueDate);
   const editing = document.getElementById("sEditingId").value;
@@ -2281,6 +2301,7 @@ function editInvoice(docId){
   document.getElementById("sDueDate").value=s.dueDate||"";
   document.getElementById("sTitle").value=s.title||"";
   document.getElementById("sKamoku").value=s.kamoku||KAMOKU_REV[0];
+  depositHint("sKamoku","sKamokuHint");
   document.getElementById("sProject").value=s.project||"";
   document.getElementById("itemRows").innerHTML="";
   (s.items||[]).forEach(i=>addItemRow(i));
@@ -2759,8 +2780,9 @@ function partyStats(pid){
   const exp = fyExpenses().filter(e=>e.partyId===pid);
   const sal = fySales().filter(s=>s.partyId===pid && s.status!=="draft" && s.status!=="cancel");
   const rcs = fyReceipts().filter(r=>r.partyId===pid && !r.invoiceId && r.status!=="void"); // 請求書なしの直接入金（取消は除外）
-  const paySum = exp.reduce((a,e)=>a+(e.amountIn||0),0);
-  const saleSum = sal.reduce((a,s)=>a+(s.total||0),0) + rcs.reduce((a,r)=>a+(r.amount||0),0);
+  // 支払累計・売上累計に預り金は含めない（未入金には含める）（v4.3）
+  const paySum = costExpenses(exp).reduce((a,e)=>a+(e.amountIn||0),0);
+  const saleSum = sal.filter(s=>!isDepositKamoku(s.kamoku)).reduce((a,s)=>a+(s.total||0),0) + rcs.filter(r=>!isDepositKamoku(r.kamoku)).reduce((a,r)=>a+(r.amount||0),0);
   const unpaid = sal.filter(s=>s.status==="issued").reduce((a,s)=>a+(s.total||0),0);
   return {paySum, saleSum, unpaid, expCount:exp.length, saleCount:sal.length+rcs.length};
 }
@@ -2822,11 +2844,63 @@ function hidePartyDetail(){ document.getElementById("partyDetail").style.display
 /* ===== 集計 ===== */
 function revenueRecords(){
   // 収益＝発行済以降の請求書 ＋ 単独発行領収書（請求書と紐づく領収書は二重計上しない）
-  const inv = fySales().filter(s=>s.status==="issued"||s.status==="paid")
+  // 預り金（v4.3）は収益ではないため除外する（預り金残高・資金繰りで別に扱う）
+  const inv = fySales().filter(s=>(s.status==="issued"||s.status==="paid") && !isDepositKamoku(s.kamoku))
     .map(s=>({kamoku:s.kamoku||"（未設定）", ex:s.subtotal||0, tax:(s.tax10||0)+(s.tax8||0), inTotal:s.total||0, project:s.project||"", partyId:s.partyId}));
-  const rcs = fyReceipts().filter(r=>!r.invoiceId && r.status!=="void")
+  const rcs = fyReceipts().filter(r=>!r.invoiceId && r.status!=="void" && !isDepositKamoku(r.kamoku))
     .map(r=>({kamoku:r.kamoku||"（未設定）", ex:r.amountEx||0, tax:r.taxAmt||0, inTotal:r.amount||0, project:r.project||"", partyId:r.partyId}));
   return [...inv, ...rcs];
+}
+/* ===== 預り金（v4.3） =====
+   受入＝科目が預り金の請求書（発行済以降）と単独発行領収書（ボイド除く）。
+     入金済の額は、請求書は入金消込したもの（paidAmount、なければ合計）、領収書は発行額。
+   支払＝経費の科目「預り金の支払（運営元等へ）」。
+   残高＝入金済 − 支払済。年度をまたぐことがあるため全期間で計算する。 */
+function depositData(){
+  const lines = [];
+  SALES.filter(s=>isDepositKamoku(s.kamoku) && (s.status==="issued"||s.status==="paid")).forEach(s=>{
+    lines.push({ date:s.issueDate||"", kind:"請求書", no:s.invoiceId, project:s.project||"（事業名なし）",
+      party: partyName(s.partyId, s.partyNameSnap), billed:s.total||0,
+      inAmt: s.status==="paid" ? (s.paidAmount || s.total || 0) : 0, outAmt:0,
+      unpaid: s.status==="issued" ? (s.total||0) : 0,
+      status: s.status==="paid" ? `入金済（${s.paidDate||""}）` : "未入金" });
+  });
+  RECEIPTS.filter(r=>isDepositKamoku(r.kamoku) && !r.invoiceId && r.status!=="void").forEach(r=>{
+    lines.push({ date:r.issueDate||"", kind:"領収書", no:r.receiptId, project:r.project||"（事業名なし）",
+      party: partyName(r.partyId, r.partyNameSnap), billed:r.amount||0, inAmt:r.amount||0, outAmt:0, unpaid:0, status:"入金済（領収書発行）" });
+  });
+  EXPENSES.filter(e=>isDepositKamoku(e.kamoku)).forEach(e=>{
+    lines.push({ date:e.date||"", kind:"支払", no:e.receiptId, project:e.project||"（事業名なし）",
+      party: e.vendor||partyName(e.partyId,""), billed:0, inAmt:0, outAmt:e.amountIn||0, unpaid:0, status:"支払済" });
+  });
+  lines.sort((a,b)=>(a.project).localeCompare(b.project) || (a.date).localeCompare(b.date) || String(a.no).localeCompare(String(b.no)));
+  const map = {};
+  lines.forEach(l=>{
+    const m = map[l.project] = map[l.project] || { project:l.project, billed:0, unpaid:0, received:0, paidOut:0 };
+    m.billed += l.billed; m.unpaid += l.unpaid; m.received += l.inAmt; m.paidOut += l.outAmt;
+  });
+  const projects = Object.values(map).map(m=>({ ...m, balance: m.received - m.paidOut }));
+  return { lines, projects };
+}
+function depositTotals(){
+  return depositData().projects.reduce((t,p)=>({ balance:t.balance+p.balance, unpaid:t.unpaid+p.unpaid }), {balance:0, unpaid:0});
+}
+function renderDeposits(){
+  const body = document.getElementById("depositTbody"); if(!body) return;
+  const d = depositData();
+  body.innerHTML = d.projects.map(p=>`<tr><td>${esc(p.project)}</td>
+    <td class="num">${yen(p.billed)}</td><td class="num" style="${p.unpaid?'color:var(--shu)':''}">${yen(p.unpaid)}</td>
+    <td class="num">${yen(p.received)}</td><td class="num">${yen(p.paidOut)}</td>
+    <td class="num" style="font-weight:700;${p.balance<0?'color:var(--shu)':''}">${yen(p.balance)}</td></tr>`).join("")
+    || `<tr><td colspan="6" class="hint">預り金の記録はありません。</td></tr>`;
+  document.getElementById("depositDetailTbody").innerHTML = d.lines.map(l=>`<tr><td>${esc(l.date)}</td><td>${l.kind}</td>
+    <td class="mono">${esc(l.no||"")}</td><td>${esc(l.project)}</td><td>${esc(l.party)}</td>
+    <td class="num">${l.kind==="支払"?"":yen(l.inAmt||l.billed)}</td><td class="num">${l.outAmt?yen(l.outAmt):""}</td><td>${esc(l.status)}</td></tr>`).join("")
+    || `<tr><td colspan="8" class="hint">明細はありません。</td></tr>`;
+}
+function depositHint(selId, hintId){
+  const h = document.getElementById(hintId);
+  if(h) h.style.display = isDepositKamoku(document.getElementById(selId).value) ? "block" : "none";
 }
 function unifiedIncomeRows(){
   const inv = fySales().filter(s=>s.status==="issued"||s.status==="paid").map(s=>({
@@ -2852,7 +2926,8 @@ function renderIncomeAll(){
 }
 function renderSummary(){
   renderIncomeAll();
-  const exps=fyExpenses();
+  renderDeposits();
+  const exps=costExpenses(fyExpenses());
   const revs=revenueRecords();
   const revNormal=revs.filter(r=>!r.kamoku.startsWith("基金"));
   const fund=revs.filter(r=>r.kamoku.startsWith("基金")).reduce((a,r)=>a+r.inTotal,0);
@@ -2865,7 +2940,8 @@ function renderSummary(){
     <div class="sumcard"><div class="t">費用（税込・${CURRENT_FY}年度）</div><div class="v">${yen(expSum)}</div><div class="s">${exps.length}件</div></div>
     <div class="sumcard ${revSum-expSum<0?'alert':'ok'}"><div class="t">差引（当期収支）</div><div class="v">${yen(revSum-expSum)}</div><div class="s">正味財産増減の概算</div></div>
     <div class="sumcard ${unpaid?'alert':''}"><div class="t">未入金の請求</div><div class="v">${yen(unpaid)}</div><div class="s">発行済・未消込</div></div>
-    <div class="sumcard ${unsettled?'alert':''}"><div class="t">未精算の立替金</div><div class="v">${yen(unsettled)}</div><div class="s">立替金精算タブへ</div></div>`;
+    <div class="sumcard ${unsettled?'alert':''}"><div class="t">未精算の立替金</div><div class="v">${yen(unsettled)}</div><div class="s">立替金精算タブへ</div></div>
+    <div class="sumcard"><div class="t">預り金残高（全期間）</div><div class="v">${yen(depositTotals().balance)}</div><div class="s">収益・費用外。下の「預り金」で事業別に確認</div></div>`;
   // 収益科目別
   const rmap={};
   revs.forEach(r=>{ const m=rmap[r.kamoku]=rmap[r.kamoku]||{ex:0,tax:0,inc:0,n:0}; m.ex+=r.ex; m.tax+=r.tax; m.inc+=r.inTotal; m.n++; });
@@ -2935,7 +3011,7 @@ function computeCashflowData(){
   const forecastBal = bal + upcomingInSum - upcomingOutSum;
   const revActual = {}, expActual = {};
   revenueRecords().forEach(r=>{ revActual[r.kamoku] = (revActual[r.kamoku]||0) + r.inTotal; });
-  exps.forEach(e=>{ expActual[e.kamoku] = (expActual[e.kamoku]||0) + (e.amountIn||0); });
+  costExpenses(exps).forEach(e=>{ expActual[e.kamoku] = (expActual[e.kamoku]||0) + (e.amountIn||0); });
   return { b, opening, monthIncome, monthExpense, startBals, endBals,
     totalIn: monthIncome.reduce((a,v)=>a+v,0), totalOut: monthExpense.reduce((a,v)=>a+v,0),
     upcomingIn, upcomingInSum, upcomingOut, upcomingOutSum, forecastBal, revActual, expActual };
@@ -2974,10 +3050,10 @@ function renderCashflow(){
     `<tr><td>${esc(e.date)}</td><td>${esc(PAY_LABELS[e.payType]||e.payType)}</td><td class="num">${yen(e.amountIn)}</td></tr>`
   ).join("") || `<tr><td colspan="3" class="hint">未精算の立替金はありません。</td></tr>`;
 
-  const revRows = KAMOKU_REV.map(k=>budgetRow(k, d.b.revenue?.[k], d.revActual[k]||0, "achieve")).join("");
+  const revRows = KAMOKU_REV.filter(k=>!isDepositKamoku(k)).map(k=>budgetRow(k, d.b.revenue?.[k], d.revActual[k]||0, "achieve")).join("");
   document.getElementById("budgetRevBody").innerHTML = revRows;
   let expAll = [];
-  Object.values(KAMOKU_EXP).forEach(list=>expAll.push(...list));
+  Object.values(KAMOKU_EXP).forEach(list=>expAll.push(...list.filter(k=>!isDepositKamoku(k))));
   const expRows = expAll.map(k=>budgetRow(k, d.b.expense?.[k], d.expActual[k]||0, "use")).join("");
   document.getElementById("budgetExpBody").innerHTML = expRows;
 }
@@ -3025,11 +3101,11 @@ function exportCashflowExcel(){
   ];
 
   const budgetRows = [];
-  KAMOKU_REV.forEach(k=>{
+  KAMOKU_REV.filter(k=>!isDepositKamoku(k)).forEach(k=>{
     const bv=Number(d.b.revenue?.[k])||0, av=d.revActual[k]||0;
     budgetRows.push({"区分":"収益","科目":k,"年間予算":bv,"実績":av,"差異":av-bv,"達成率":bv?Math.round(av/bv*100)+"%":"—"});
   });
-  let expAll=[]; Object.values(KAMOKU_EXP).forEach(list=>expAll.push(...list));
+  let expAll=[]; Object.values(KAMOKU_EXP).forEach(list=>expAll.push(...list.filter(k=>!isDepositKamoku(k))));
   expAll.forEach(k=>{
     const bv=Number(d.b.expense?.[k])||0, av=d.expActual[k]||0;
     budgetRows.push({"区分":"費用","科目":k,"年間予算":bv,"実績":av,"差異":av-bv,"執行率":bv?Math.round(av/bv*100)+"%":"—"});
@@ -3073,7 +3149,7 @@ function exportExcel(){
   // 科目別集計
   const sumRows=[];
   const emap={};
-  fyExpenses().forEach(e=>{ const m=emap[e.kamoku]=emap[e.kamoku]||{ex:0,tax:0,inc:0,n:0}; m.ex+=e.amountEx||0; m.tax+=e.taxAmt||0; m.inc+=e.amountIn||0; m.n++; });
+  costExpenses(fyExpenses()).forEach(e=>{ const m=emap[e.kamoku]=emap[e.kamoku]||{ex:0,tax:0,inc:0,n:0}; m.ex+=e.amountEx||0; m.tax+=e.taxAmt||0; m.inc+=e.amountIn||0; m.n++; });
   const rmap={};
   revenueRecords().forEach(r=>{ const m=rmap[r.kamoku]=rmap[r.kamoku]||{ex:0,tax:0,inc:0,n:0}; m.ex+=r.ex; m.tax+=r.tax; m.inc+=r.inTotal; m.n++; });
   Object.entries(rmap).forEach(([k,m])=>sumRows.push({"区分":"収益","科目":k,"税抜":m.ex,"消費税":m.tax,"税込":m.inc,"件数":m.n}));
@@ -3082,7 +3158,7 @@ function exportExcel(){
   // 取引先別集計
   const tmap={};
   revenueRecords().forEach(r=>{ if(!r.partyId) return; const m=tmap[r.partyId]=tmap[r.partyId]||{rev:0,exp:0}; m.rev+=r.inTotal; });
-  fyExpenses().forEach(e=>{ if(!e.partyId) return; const m=tmap[e.partyId]=tmap[e.partyId]||{rev:0,exp:0}; m.exp+=e.amountIn||0; });
+  costExpenses(fyExpenses()).forEach(e=>{ if(!e.partyId) return; const m=tmap[e.partyId]=tmap[e.partyId]||{rev:0,exp:0}; m.exp+=e.amountIn||0; });
   const ptyRows=Object.entries(tmap).map(([pid,m])=>({"取引先ID":pid,"取引先":partyName(pid,""),"売上(税込)":m.rev,"支払(税込)":m.exp,"差引":m.rev-m.exp}));
   addSheet(wb, ptyRows, "取引先別集計");
   // 小口現金出納帳
@@ -3090,6 +3166,10 @@ function exportExcel(){
     ? {"日付":"","摘要":r.label,"入金（補給）":"","出金（支出）":"","残高":r.balance,"記録元":""}
     : {"日付":r.date,"摘要":r.label,"入金（補給）":r.in||"","出金（支出）":r.out||"","残高":r.balance,"記録元":r.sourced?"経費登録時に転記":"手入力"});
   addSheet(wb, pcRows, "小口現金出納帳");
+  // 預り金（v4.3・全期間）
+  const dep = depositData();
+  addSheet(wb, dep.projects.map(p=>({"事業名／案件名":p.project,"請求額":p.billed,"うち未入金":p.unpaid,"入金済（預り）":p.received,"支払済":p.paidOut,"預り残高":p.balance})), "預り金残高");
+  addSheet(wb, dep.lines.map(l=>({"日付":l.date,"区分":l.kind,"番号":l.no,"事業名":l.project,"相手先":l.party,"預り（入金）":l.inAmt||"","支払":l.outAmt||"","状態":l.status})), "預り金明細");
   XLSX.writeFile(wb, `TeamP_会計_${CURRENT_FY}年度_${todayStr()}.xlsx`);
   showMsg("Excelを出力しました");
 }
