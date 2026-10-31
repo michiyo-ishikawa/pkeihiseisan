@@ -148,11 +148,12 @@ table.data tr:hover td{background:#fafbf8}
 .doc .note{font-size:8.5pt;margin-top:4mm;color:#222}
 .doc .proviso{border-bottom:1px solid #000;padding:1mm 2mm 1mm 1mm;margin:3mm 0;min-height:9mm}
 .doc .regno{font-size:9.5pt}
-/* 角印（v4.2）。position:absolute で重ねるだけなので、帳票の高さ・改ページには影響しない */
+/* 角印（v4.2）。position:absolute で重ねるだけなので、帳票の高さ・改ページには影響しない。
+   rightをマイナスにすると用紙の印字範囲からはみ出して右側が切れるため、必ず0以上にすること */
 .doc .issuer{position:relative}
 .doc .kakuin{position:absolute;pointer-events:none;mix-blend-mode:multiply;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.doc .kakuin.inv{width:21mm;height:21mm;right:-8mm;top:-9mm}
-.doc.receipt .kakuin.rc{width:24mm;height:24mm;right:-5mm;top:-13mm}
+.doc .kakuin.inv{width:21mm;height:21mm;right:0;top:-9mm}
+.doc.receipt .kakuin.rc{width:24mm;height:24mm;right:0;top:-13mm}
 .doc .stampbox{border:1px solid #999;width:22mm;height:22mm;font-size:7.5pt;color:#666;text-align:center;padding-top:1mm}
 /* ===== 領収書のみ：A4を4面付け（4ページ／1枚）で刷って裁断する前提のレイアウト =====
 
